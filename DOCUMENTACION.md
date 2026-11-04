@@ -15,7 +15,7 @@ No deben documentarse como terminadas funciones que solamente estén propuestas 
 
 ## Estado actual
 
-El proyecto ya cuenta con la estructura inicial del monorepo y la base de seguridad para la futura autenticación. Aún no se conecta a la API del SII ITC, a Supabase ni se han implementado las pantallas funcionales.
+El proyecto ya cuenta con la estructura inicial del monorepo, la base de seguridad para la autenticación y la conexión de servidor a Supabase. Aún no se conecta a la API del SII ITC, no persiste sesiones desde endpoints y no se han implementado las pantallas funcionales.
 
 ### Implementado
 
@@ -26,13 +26,15 @@ El proyecto ya cuenta con la estructura inicial del monorepo y la base de seguri
 - CORS restringido a un origen configurado.
 - Base para sesiones mediante cookie `httpOnly`.
 - Validación de variables de entorno del backend.
+- Cliente de Supabase exclusivo de backend.
+- Tabla `public.app_sessions` disponible en Supabase para persistir sesiones futuras.
 - Compilación y validación de tipos exitosas.
 
 ### Pendiente
 
 - Rutas y componentes de interfaz.
 - Autenticación real mediante el backend y SII ITC.
-- Persistencia de sesiones y funcionalidades propias en Supabase PostgreSQL.
+- Repositorio y operaciones de persistencia de sesiones en Supabase PostgreSQL.
 - Consulta de perfil, calificaciones, kardex y horario.
 - Planificador Inteligente de Trayectoria Académica.
 - Pruebas, despliegue en Render y documentación visual.
@@ -62,11 +64,27 @@ El frontend nunca se comunica directamente con la API institucional SII ITC. Tod
 1. El usuario envía correo y contraseña al endpoint propio `POST /auth/login` mediante HTTPS.
 2. El backend consulta el login de SII ITC.
 3. El backend guarda el JWT institucional únicamente del lado servidor, asociado a una sesión propia.
-4. El backend devuelve una cookie con un identificador de sesión aleatorio. La cookie no contiene el JWT institucional.
+4. El backend devolverá una cookie con un identificador de sesión aleatorio. La cookie no contendrá el JWT institucional.
 5. En peticiones posteriores, el navegador envía la cookie al backend y este recupera la sesión antes de consultar SII ITC.
 6. Al cerrar sesión, el backend invalida la sesión y elimina la cookie.
 
-La persistencia de sesiones todavía no está implementada. Se usará Supabase PostgreSQL; el diseño final debe considerar caducidad, invalidación y protección del token institucional.
+La tabla de sesiones y el cliente de Supabase ya están preparados. Todavía falta implementar el repositorio que cree, consulte, renueve, revoque y elimine sesiones. Dicho repositorio deberá cifrar el JWT institucional antes de guardarlo.
+
+### Tabla `public.app_sessions`
+
+La tabla existe en Supabase y su estructura fue validada sin leer datos. Sus columnas son:
+
+| Columna | Propósito |
+|---|---|
+| `id` | Identificador aleatorio de sesión; será el único valor representado por la cookie. |
+| `sii_token_ciphertext` | JWT de SII cifrado por el backend; nunca se envía al navegador. |
+| `student_identifier` | Identificador no sensible necesario para asociar la sesión a un estudiante, si está disponible. |
+| `created_at` | Fecha de creación de la sesión. |
+| `expires_at` | Fecha de expiración; las sesiones vencidas no deben aceptarse. |
+| `revoked_at` | Fecha de revocación para logout o invalidación manual. |
+| `last_seen_at` | Última actividad útil para auditoría y políticas de expiración. |
+
+La tabla tiene RLS habilitado. Los roles `anon` y `authenticated` no tienen permisos; solo el backend usa una credencial de servidor. Esto impide que el navegador consulte la tabla de forma directa.
 
 ## Estructura del repositorio
 
@@ -124,6 +142,7 @@ La URL final deberá provenir de una variable pública de Vite, nunca de una URL
 - `cookie-parser`: lectura de cookies enviadas al backend.
 - `dotenv`: carga de variables locales desde `.env`.
 - `zod`: validación de configuración y, posteriormente, de peticiones.
+- `@supabase/supabase-js`: cliente para acceder a Supabase desde el backend.
 - `tsx`: ejecución de TypeScript durante desarrollo.
 
 ### `backend/src/server.ts`
@@ -161,6 +180,12 @@ Centraliza las opciones que se aplicarán al crear la cookie de sesión:
 
 Este módulo todavía no emite cookies porque aún no existe el login real ni el repositorio de sesiones.
 
+### `backend/src/lib/supabase.ts`
+
+Crea un cliente de Supabase para uso exclusivo del backend. Se inicializa con `SUPABASE_URL` y `SUPABASE_SECRET_KEY`; la renovación y persistencia de sesión de Supabase Auth están deshabilitadas porque las sesiones de esta aplicación son propias y se relacionarán con SII ITC, no con Supabase Auth.
+
+La llave de servidor puede evitar RLS, por lo que este cliente no puede llegar al frontend ni recibir tokens o encabezados controlados por el usuario.
+
 ## Variables de entorno
 
 Todas las variables reales se configuran en `backend/.env` local o en el panel de Render. Ese archivo no se debe confirmar. `backend/.env.example` solo contiene valores seguros de ejemplo.
@@ -175,8 +200,9 @@ Todas las variables reales se configuran en `backend/.env` local o en el panel d
 | `COOKIE_SECURE` | Obliga HTTPS para la cookie | `false` en local; `true` en producción |
 | `COOKIE_SAME_SITE` | Política de envío de cookie | `lax` en local |
 | `SII_BASE_URL` | URL base institucional, pendiente de uso | No confirmar secretos ni datos sensibles |
-| `SUPABASE_URL` | URL del proyecto Supabase, pendiente de uso | Configurar solo fuera del repositorio |
-| `SUPABASE_SERVICE_ROLE_KEY` | Llave exclusiva del backend, pendiente de uso | Nunca exponer al frontend |
+| `SUPABASE_URL` | URL del proyecto Supabase | Configurar solo fuera del repositorio |
+| `SUPABASE_SECRET_KEY` | Llave exclusiva del backend para acceso administrativo | Nunca exponer al frontend |
+| `SII_TOKEN_ENCRYPTION_KEY` | Llave Base64 de 32 bytes para cifrar el JWT institucional antes de persistirlo | Nunca exponer ni confirmar en Git |
 
 ### Entorno local y producción
 
@@ -235,11 +261,20 @@ feature/auth-backend-sii-sessions
 - Se creó la configuración centralizada de una cookie de sesión `httpOnly`.
 - Se documentaron las reglas que impiden configuraciones inseguras de cookies.
 
+### Fundamento de persistencia de sesiones en Supabase
+
+- Se añadió `@supabase/supabase-js` al backend.
+- Se agregaron y validan `SUPABASE_URL`, `SUPABASE_SECRET_KEY` y `SII_TOKEN_ENCRYPTION_KEY` en la configuración del backend.
+- Se creó `backend/src/lib/supabase.ts` con un cliente exclusivo de servidor y sin persistencia de Supabase Auth.
+- Se creó la tabla `public.app_sessions` con RLS y permisos exclusivos para el backend.
+- Se validaron localmente el tipado, la compilación y el arranque del backend.
+- Se verificaron mediante consultas de solo lectura la conectividad con Supabase y las columnas esperadas de `app_sessions`, sin leer filas ni imprimir secretos.
+
 ## Próximo cambio previsto
 
-El siguiente conjunto de cambios deberá diseñar e implementar la persistencia de sesiones en Supabase PostgreSQL. Antes de implementarlo se deberá documentar:
+El siguiente conjunto de cambios deberá implementar el repositorio de sesiones sobre la infraestructura de Supabase ya creada. Antes de implementarlo se deberá documentar:
 
-- Esquema de tabla de sesiones.
+- Cifrado AES-256-GCM del JWT de SII antes de persistirlo.
 - Forma de asociar una sesión al token institucional sin exponerlo.
 - Caducidad e invalidación.
 - Variables de entorno nuevas.

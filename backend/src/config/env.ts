@@ -10,6 +10,12 @@ const envSchema = z.object({
   SESSION_TTL_HOURS: z.coerce.number().int().positive().default(8),
   COOKIE_SAME_SITE: z.enum(['lax', 'none']).default('lax'),
   COOKIE_SECURE: z.enum(['true', 'false']).optional(),
+  SUPABASE_URL: z.string().url(),
+  SUPABASE_SECRET_KEY: z.string().min(1),
+  SII_TOKEN_ENCRYPTION_KEY: z.string().refine(
+    (value) => Buffer.from(value, 'base64').length === 32,
+    'SII_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes.',
+  ),
 });
 
 const parsed = envSchema.safeParse(process.env);
