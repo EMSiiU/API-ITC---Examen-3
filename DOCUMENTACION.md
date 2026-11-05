@@ -35,7 +35,7 @@ El proyecto ya cuenta con la estructura inicial del monorepo, la base de segurid
 - Rutas y componentes de interfaz.
 - Autenticación real mediante el backend y SII ITC.
 - Repositorio interno de sesiones en Supabase PostgreSQL, con cifrado del token institucional.
-- Consulta de perfil, calificaciones, kardex y horario.
+- Integración y prueba real de login, perfil, calificaciones, kardex y horario con SII ITC.
 - Planificador Inteligente de Trayectoria Académica.
 - Pruebas, despliegue en Render y documentación visual.
 
@@ -204,6 +204,42 @@ Centraliza el acceso interno a `public.app_sessions`. Sus funciones no son endpo
 | `touchSession` | Actualiza la hora de última actividad de una sesión activa. |
 | `revokeSession` | Marca una sesión como revocada para logout o invalidación. |
 
+### `backend/src/modules/sii/sii-api.error.ts`
+
+Define errores internos y seguros para el cliente institucional. Los códigos permiten que futuros controladores devuelvan mensajes adecuados sin filtrar detalles de SII ITC:
+
+| Código | Significado |
+|---|---|
+| `invalid_credentials` | SII ITC rechazó las credenciales. |
+| `unavailable` | No fue posible comunicarse con SII ITC o respondió con un error no recuperable. |
+| `invalid_response` | SII ITC respondió exitosamente, pero el formato recibido no contiene el token esperado. |
+
+### `backend/src/modules/sii/sii.client.ts`
+
+Es el cliente exclusivo del backend para iniciar sesión en SII ITC. Su función `loginWithSii`:
+
+- Envía correo y contraseña a `POST /api/login` usando la URL configurada en `SII_API_BASE_URL`.
+- Establece `Accept` y `Content-Type` como `application/json`.
+- Limita la espera con `SII_REQUEST_TIMEOUT_MS` para impedir solicitudes bloqueadas indefinidamente.
+- Reconoce respuestas `401` y `422` como credenciales inválidas.
+- Clasifica errores de red, timeout u otros códigos no exitosos como servicio no disponible.
+- Valida la respuesta exitosa con Zod y requiere un campo `token` no vacío.
+- Devuelve el token solamente al servicio interno de autenticación.
+
+El cliente no registra ni reenvía credenciales, tokens ni respuestas institucionales al navegador. El campo exacto del token deberá corroborarse en una demostración real autorizada; si SII ITC utiliza otra propiedad, el esquema de Zod debe actualizarse a partir de esa respuesta real, no inventarse.
+
+### `backend/src/modules/auth/authentication.service.ts`
+
+Orquesta el flujo de inicio de sesión del lado servidor:
+
+1. Envía las credenciales al cliente SII interno.
+2. Recibe el JWT institucional solo dentro del backend.
+3. Genera un UUID aleatorio para la nueva sesión local.
+4. Calcula la expiración según `SESSION_TTL_HOURS`.
+5. Crea la sesión mediante `createSession`, que cifra el JWT antes de persistirlo en Supabase.
+
+No existe todavía un controlador HTTP que invoque este servicio; por lo tanto, ninguna cookie se emite todavía y el frontend no puede autenticarse aún.
+
 ### `backend/src/lib/supabase.ts`
 
 Crea un cliente de Supabase para uso exclusivo del backend. Se inicializa con `SUPABASE_URL` y `SUPABASE_SECRET_KEY`; la renovación y persistencia de sesión de Supabase Auth están deshabilitadas porque las sesiones de esta aplicación son propias y se relacionarán con SII ITC, no con Supabase Auth.
@@ -223,7 +259,8 @@ Todas las variables reales se configuran en `backend/.env` local o en el panel d
 | `SESSION_TTL_HOURS` | Duración de la sesión en horas | `8` |
 | `COOKIE_SECURE` | Obliga HTTPS para la cookie | `false` en local; `true` en producción |
 | `COOKIE_SAME_SITE` | Política de envío de cookie | `lax` en local |
-| `SII_BASE_URL` | URL base institucional, pendiente de uso | No confirmar secretos ni datos sensibles |
+| `SII_API_BASE_URL` | URL base del servicio institucional | `https://sii.celaya.tecnm.mx` en configuración local |
+| `SII_REQUEST_TIMEOUT_MS` | Tiempo máximo de espera para solicitudes a SII | `10000` |
 | `SUPABASE_URL` | URL del proyecto Supabase | Configurar solo fuera del repositorio |
 | `SUPABASE_SECRET_KEY` | Llave exclusiva del backend para acceso administrativo | Nunca exponer al frontend |
 | `SII_TOKEN_ENCRYPTION_KEY` | Llave Base64 de 32 bytes para cifrar el JWT institucional antes de persistirlo | Nunca exponer ni confirmar en Git |
@@ -303,11 +340,18 @@ feature/auth-backend-sii-sessions
 - Se validaron el tipado y la compilación del proyecto.
 - Se ejecutó una prueba local con un token ficticio: el valor cifrado no incluyó el texto original y se descifró correctamente usando la misma sesión.
 
+### Cliente SII y servicio de autenticación
+
+- Se añadió `SII_API_BASE_URL` y `SII_REQUEST_TIMEOUT_MS` a la configuración validada del backend.
+- Se creó `sii-api.error.ts` para clasificar fallos de credenciales, disponibilidad y formato de respuesta.
+- Se creó `sii.client.ts` con login interno, timeout y validación del token recibido.
+- Se creó `authentication.service.ts`, que une el login institucional con la creación de una sesión local cifrada.
+- Se validaron el tipado y la compilación del proyecto sin enviar solicitudes a SII ITC ni usar credenciales institucionales.
+
 ## Próximo cambio previsto
 
-El siguiente conjunto de cambios deberá implementar el cliente interno de SII ITC y el servicio de autenticación. Antes de implementarlo se deberá documentar:
+El siguiente conjunto de cambios deberá implementar los controladores y rutas HTTP de autenticación. Antes de implementarlo se deberá documentar:
 
-- URL base y contrato del API SII, sin incluir credenciales.
-- Manejo de errores institucionales, de red y de credenciales inválidas.
 - Contrato de `POST /auth/login`, `GET /auth/session` y `POST /auth/logout`.
 - Emisión y borrado de la cookie `httpOnly` mediante los controladores HTTP.
+- Conversión segura de errores internos a respuestas HTTP sin revelar detalles institucionales.
