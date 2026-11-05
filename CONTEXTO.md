@@ -50,6 +50,27 @@ La aplicación debe usar datos reales de la API institucional SII ITC para login
 
 La funcionalidad adicional sí puede incluir datos simulados si no existen datos suficientes. El equipo todavía no ha seleccionado esa funcionalidad; el Planificador Inteligente de Trayectoria Académica es solamente una propuesta y no debe implementarse ni presentarse como decisión final.
 
+El PDF original confirma estas rutas institucionales; no deben adivinarse ni buscarse mediante pruebas de rutas alternativas:
+
+| Método | Ruta SII | Autenticación |
+|---|---|---|
+| POST | `/api/login` | JSON `{ email, password }` |
+| GET | `/api/movil/estudiante` | Bearer token |
+| GET | `/api/movil/estudiante/calificaciones` | Bearer token |
+| GET | `/api/movil/estudiante/kardex` | Bearer token |
+| GET | `/api/movil/estudiante/horarios` | Bearer token |
+
+El host configurado en `SII_API_BASE_URL` es `https://sii.celaya.tecnm.mx`; las rutas anteriores ya incluyen `/api`. El PDF documenta las rutas, pero no el esquema completo del JSON de Kardex, calificaciones u horarios. Su contrato debe confirmarse mediante consultas reales desde el backend antes de definir sus DTO.
+
+Requisitos de interfaz que deben conservarse durante el desarrollo:
+
+- Login con validación, manejo de errores, redirección al dashboard y rutas privadas que regresen al login al perder la sesión.
+- Dashboard personalizado con indicadores visuales, carga y mensajes de error.
+- Calificaciones con nombre de materia, período y nota final; búsqueda o filtrado en tiempo real y colores de desempeño.
+- Kardex con historial completo estructurado y horario organizado por día y hora, en secciones independientes con navegación fluida.
+- Funcionalidad adicional original con backend de administración y una propuesta que justifique sus beneficios. Puede formar parte de Express; no exige un servicio adicional independiente.
+- README con instalación, ejecución, descripción de la tecnología y capturas, publicación y demostración en vivo con participación de ambos integrantes. Las capturas y el README final se harán al terminar la práctica.
+
 ## Arquitectura acordada
 
 ```text
@@ -70,7 +91,7 @@ La sesión usa una cookie `httpOnly`.
 
 - El navegador no puede leerla mediante JavaScript.
 - El JWT institucional de SII nunca se entrega al frontend ni se guarda en `localStorage` o `sessionStorage`.
-- La cookie tendrá solo un identificador de sesión aleatorio.
+- La cookie contiene solo un identificador de sesión aleatorio.
 - El backend asocia ese identificador con el JWT institucional cifrado y guardado del lado servidor, mediante Supabase.
 - El frontend deberá incluir `credentials: 'include'` al consumir el backend.
 - El backend configura CORS con origen explícito y `credentials: true`.
@@ -94,13 +115,29 @@ Para producción, la cookie debe usar `Secure=true`. Si frontend y backend se ma
 - Sesión local con cookie `httpOnly`; el JWT de SII se cifra y persiste solo en Supabase.
 - `GET /auth/session`, `POST /auth/logout` y middleware reutilizable de sesión.
 - `GET /student/profile`, protegido por sesión y conectado al endpoint real de perfil SII.
+- DTO `StudentProfile` que valida y normaliza la respuesta institucional mediante Zod antes de entregarla al frontend.
 - CORS restringido a `FRONTEND_ORIGIN`, con credenciales habilitadas.
 
 Detalles de integración confirmados que Rebo no debe sustituir ni exponer:
 
 - El JWT de login SII existe en `message.login.token`, pero solo lo procesa el backend.
-- El endpoint propio de perfil responde `200 { profile: ... }`; los datos académicos útiles están bajo `profile.data`.
+- El endpoint propio de perfil responde `200 { profile: StudentProfile }`. El contrato actual usa `profile.controlNumber`, `profile.email`, `profile.semester`, `profile.photoUrl`, `profile.academicProgress`, `profile.averages` y `profile.subjects`. Ya no devuelve `profile.data`.
 - El frontend debe enviar `credentials: 'include'` y nunca administrar tokens institucionales.
+
+Contrato del perfil normalizado; todos los valores hoja pueden ser `null` si faltan en la respuesta institucional:
+
+| Objeto | Campos |
+|---|---|
+| `profile` | `controlNumber`, `email` y `photoUrl`: texto; `semester`: número |
+| `profile.academicProgress` | `accumulatedCredits`, `complementaryCredits`, `progressPercentage`, `progressWhileEnrolledPercentage`: números |
+| `profile.averages` | `weighted`, `arithmetic`: números |
+| `profile.subjects` | `taken`, `passed`, `failed`, `failedNotAccredited`, `failedFirstAttempt`, `failedSecondAttempt`: números |
+
+El DTO convierte números recibidos como texto a `number`; el frontend debe distinguir `null` de cero. Una estructura incompatible produce `502` mediante el controlador. El campo institucional `persona` todavía no se expone: falta confirmar su estructura antes de incorporar el nombre al dashboard.
+
+Validaciones realizadas: compilación backend y prueba aislada del DTO con datos válidos e inválidos; flujo manual con SII real (`health=200`, `login=200`, `profile=200`, `logout=204`); `npm run check` pasó en la revisión posterior. El frontend sigue siendo la plantilla de Vite, por lo que todavía no hay login visual ni dashboard integrado. No se deben incorporar datos personales de esas pruebas a documentos ni fixtures.
+
+Siguiente tarea de Emilio: integrar `GET /api/movil/estudiante/kardex` desde el cliente SII, confirmar el JSON real y definir el contrato protegido propio `GET /student/kardex`. La ruta institucional está confirmada; el endpoint propio aún no está implementado.
 
 Rebo debe partir de `main` actualizado y verificar que los Pull Requests de Emilio estén fusionados antes de conectar el frontend. No debe editar módulos backend de Emilio sin coordinación.
 
@@ -121,10 +158,11 @@ Rebo debe partir de `main` actualizado y verificar que los Pull Requests de Emil
 │   │   ├── app.ts
 │   │   ├── server.ts
 │   │   ├── config/env.ts
+│   │   ├── lib/supabase.ts            # Cliente Supabase exclusivo del backend
 │   │   └── modules/
 │   │       ├── auth/                 # Login, sesión, cookie y middleware
 │   │       ├── sii/                  # Cliente institucional exclusivo de backend
-│   │       └── student/              # Perfil protegido
+│   │       └── student/              # Router, controlador y student-profile.dto.ts
 │   ├── .env.example
 │   ├── package.json
 │   └── tsconfig.json
@@ -143,6 +181,8 @@ Requisitos:
 
 Desde la raíz del repositorio:
 
+Antes de ejecutar el backend, configurar `backend/.env` a partir de `backend/.env.example`, sin compartir valores reales. Supabase debe tener la tabla `app_sessions`; consultar `DOCUMENTACION.md` para su estructura. `npm install` no crea esa tabla. Los dos comandos `dev:*` se ejecutan en terminales distintas.
+
 ```powershell
 npm install
 npm run dev:frontend
@@ -157,22 +197,22 @@ Direcciones locales esperadas:
 - Backend: `http://localhost:3000`
 - Salud del backend: `http://localhost:3000/health`, con respuesta `{ "status": "ok" }`
 
-## Contratos de API previstos
+## Contratos de API actuales y previstos
 
 Los endpoints de autenticación y perfil están implementados; calificaciones, kardex, horario y funcionalidad adicional siguen pendientes. Rebo debe coordinar cualquier cambio de contrato con Emilio.
 
 | Método y ruta | Solicitud | Respuesta esperada | Responsable |
 |---|---|---|---|
 | `POST /auth/login` | `{ email, password }` | Cookie de sesión y `{ authenticated: true }` | Emilio |
-| `GET /auth/session` | Cookie enviada automáticamente | Estado de autenticación y datos mínimos seguros | Emilio |
-| `POST /auth/logout` | Cookie de sesión | Limpia/invalida sesión | Emilio |
-| `GET /student/profile` | Cookie de sesión | `200 { profile: ... }` desde SII | Emilio |
-| `GET /student/grades` | Cookie de sesión | Calificaciones desde SII | Emilio |
-| `GET /student/kardex` | Cookie de sesión | Kardex desde SII | Emilio |
-| `GET /student/schedule` | Cookie de sesión | Horario desde SII | Emilio |
+| `GET /auth/session` | Cookie enviada automáticamente | `200 { authenticated: true }`; `401` sin sesión válida | Emilio |
+| `POST /auth/logout` | Cookie de sesión | Revoca sesión, elimina cookie y devuelve `204` | Emilio |
+| `GET /student/profile` | Cookie de sesión | `200 { profile: StudentProfile }` normalizado | Emilio |
+| `GET /student/grades` (pendiente) | Cookie de sesión | Calificaciones desde SII; DTO por confirmar | Emilio |
+| `GET /student/kardex` (pendiente) | Cookie de sesión | Kardex desde SII; DTO por confirmar | Emilio |
+| `GET /student/schedule` (pendiente) | Cookie de sesión | Horario desde SII; DTO por confirmar | Emilio |
 | Rutas de funcionalidad adicional | Por definir | Por definir tras seleccionar propuesta | Ambos |
 
-El formato final de las respuestas debe acordarse antes de conectar el frontend. Rebo no debe inventar campos institucionales ni exponer tokens en la interfaz.
+El contrato de perfil anterior ya está implementado; los contratos pendientes deben acordarse antes de conectar sus pantallas. Rebo no debe inventar campos institucionales ni exponer tokens en la interfaz. `/auth/session` valida la sesión local; un JWT institucional inválido se detecta al consultar SII y el controlador de perfil revoca entonces la sesión y devuelve `401`.
 
 ## Tareas de Rebo en orden sugerido
 
@@ -187,7 +227,7 @@ Objetivo:
 - Construir interfaz de login accesible, validando campos vacíos y formato básico de correo.
 - Crear una capa o servicio de API que apunte solo al backend propio.
 - Implementar estados de carga y mensajes de error preparados para el contrato real.
-- Proteger rutas privadas consultando `GET /auth/session` cuando esté disponible.
+- Proteger rutas privadas consultando `GET /auth/session`, que ya está disponible; redirigir al login ante `401` también en las consultas académicas.
 
 Restricciones:
 
@@ -202,7 +242,7 @@ Rama sugerida: `feature/grades-schedule-ui`.
 
 Objetivo:
 
-- Pantalla de calificaciones con tabla o tarjetas, filtro por materia/período e indicadores visuales de desempeño.
+- Pantalla de calificaciones con tabla o tarjetas, materia, período, nota final, búsqueda/filtro en tiempo real e indicadores verde/amarillo/rojo según el desempeño.
 - Pantalla de horario organizada por día y hora, en formato de agenda o tabla.
 - Estados de carga, error y sin datos.
 - Consumir únicamente `GET /student/grades` y `GET /student/schedule` cuando Emilio los entregue.
@@ -233,6 +273,8 @@ Objetivo:
 5. Pendientes reales.
 
 Este archivo no sustituye al README: el README se orienta a instalar y ejecutar; `DOCUMENTACION.md` explica la arquitectura y lógica interna.
+
+Actualizar las secciones existentes cuando cambie un archivo o contrato; no repetir una sección por cada modificación. Mantener `CONTEXTO.md` sincronizado cuando cambien contratos, responsabilidades o decisiones que afecten a Rebo. El README actual es provisional; sus capturas y versión final se completarán al terminar la práctica.
 
 ## Reglas de seguridad y calidad
 
