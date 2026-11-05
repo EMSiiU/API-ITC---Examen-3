@@ -1,5 +1,6 @@
 export type SiiApiErrorCode =
     | 'invalid_credentials'
+    | 'invalid_session'
     | 'unavailable'
     | 'invalid_response';
 
