@@ -236,7 +236,9 @@ Es el cliente exclusivo del backend para iniciar sesión en SII ITC. Su función
 - Valida la respuesta exitosa con Zod y requiere un campo `token` no vacío.
 - Devuelve el token solamente al servicio interno de autenticación.
 
-El cliente no registra ni reenvía credenciales, tokens ni respuestas institucionales al navegador. El campo exacto del token deberá corroborarse en una demostración real autorizada; si SII ITC utiliza otra propiedad, el esquema de Zod debe actualizarse a partir de esa respuesta real, no inventarse.
+El formato real confirmado del login institucional contiene el JWT en `message.login.token`. Por ello, el esquema del cliente valida `status: 200`, `flag: 'success'` y la ruta anidada `message.login.token` antes de devolver exclusivamente el token al servicio interno.
+
+El cliente no registra ni reenvía credenciales, tokens ni respuestas institucionales al navegador.
 
 ### `backend/src/modules/auth/authentication.service.ts`
 
@@ -401,6 +403,16 @@ feature/auth-backend-sii-sessions
 - Se creó `sii.client.ts` con login interno, timeout y validación del token recibido.
 - Se creó `authentication.service.ts`, que une el login institucional con la creación de una sesión local cifrada.
 - Se validaron el tipado y la compilación del proyecto sin enviar solicitudes a SII ITC ni usar credenciales institucionales.
+
+### Validación real de autenticación institucional
+
+- Se confirmó mediante una prueba autorizada que el endpoint institucional devuelve el JWT en `message.login.token`.
+- Se actualizó el cliente SII para extraer únicamente ese valor después de validar la estructura de respuesta esperada.
+- Se probó el flujo completo contra el backend local: login, consulta de sesión y logout.
+- El backend devolvió al cliente únicamente el estado de autenticación y mantuvo el JWT institucional fuera del navegador.
+- Se verificó en Supabase que las filas de `app_sessions` guardan el token con el formato cifrado `v1.iv.authTag.ciphertext`, no como JWT legible.
+- Se comprobó el ciclo de vida de sesión: una sesión cerrada queda marcada con `revoked_at`, mientras que una sesión activa conserva `revoked_at` como `NULL`.
+- No se documentan ni almacenan en el repositorio identificadores de sesión, tokens, correos, contraseñas ni fechas específicas de las pruebas.
 
 ### Rutas HTTP de autenticación
 

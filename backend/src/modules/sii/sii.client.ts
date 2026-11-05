@@ -4,7 +4,13 @@ import { env } from '../../config/env.js';
 import { SiiApiError } from './sii-api.error.js';
 
 const loginResponseSchema = z.object({
-    token: z.string().min(1),
+    status: z.literal(200),
+    flag: z.literal('success'),
+    message: z.object({
+        login: z.object({
+        token: z.string().min(1),
+        }),
+    }),
 });
 
 export interface SiiCredentials {
@@ -62,5 +68,5 @@ export async function loginWithSii(
         );
     }
 
-    return parsed.data.token;
+    return parsed.data.message.login.token;
 }
