@@ -18,6 +18,7 @@ El navegador solo consulta nuestro backend. Las credenciales se envían al backe
 - Login real contra SII, validación de entradas y manejo de errores institucionales.
 - Sesiones persistidas, consulta de sesión, cierre de sesión y middleware de protección.
 - Perfil académico protegido, validado con Zod y normalizado a un DTO propio para el dashboard.
+- Kardex protegido conectado a SII y normalizado a un DTO que conserva períodos e intentos, incluidas notas textuales como `AC`.
 - CORS con origen explícito y credenciales habilitadas.
 - Frontend todavía con la plantilla inicial de Vite; las pantallas e integración visual siguen pendientes.
 
@@ -32,8 +33,11 @@ El flujo local de salud, login, perfil normalizado y logout se probó con SII re
 | `GET /auth/session` | Requiere cookie válida; devuelve `{ authenticated: true }` o `401` |
 | `POST /auth/logout` | Revoca la sesión local y elimina la cookie; devuelve `204` |
 | `GET /student/profile` | Requiere cookie válida; devuelve `{ profile: StudentProfile }` |
+| `GET /student/kardex` | Requiere cookie válida; devuelve `{ kardex: StudentKardex }` |
 
 `StudentProfile` contiene `controlNumber`, `email`, `semester`, `photoUrl`, `academicProgress`, `averages` y `subjects`. Los campos ausentes se representan con `null`; el frontend no debe buscar `profile.data` ni recibir el JWT institucional.
+
+`StudentKardex` contiene `progressPercentage` y `subjects`. Sus registros incluyen materia, clave, período, créditos, semestre, descripción de evaluación y calificación. `gradeLabel` conserva el texto para mostrar; `grade` es número o `null` para etiquetas como `AC`. La consulta real se comprobó en Postman y el DTO pasó pruebas con la respuesta completa; queda pendiente la comprobación manual final del endpoint normalizado y del rechazo sin cookie.
 
 ## Endpoints institucionales del examen
 
@@ -44,7 +48,7 @@ El backend es el único consumidor de estas rutas. El host configurado es `https
 | `POST /api/login` | Implementado y probado |
 | `GET /api/movil/estudiante` | Implementado y probado |
 | `GET /api/movil/estudiante/calificaciones` | Pendiente |
-| `GET /api/movil/estudiante/kardex` | Pendiente; siguiente tarea de backend |
+| `GET /api/movil/estudiante/kardex` | Integrado; DTO validado, comprobación HTTP final pendiente |
 | `GET /api/movil/estudiante/horarios` | Pendiente |
 
 Las consultas protegidas usan `Authorization: Bearer <token>` exclusivamente desde el backend. La autenticación y los datos académicos obligatorios deben proceder de SII real.
