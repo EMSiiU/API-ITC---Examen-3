@@ -7,11 +7,15 @@ import {
     authenticateWithSii,
 } from './authentication.service.js';
 import {
-    findActiveSession,
+    getAuthenticatedSession,
+} from './authenticated-session.middleware.js';
+import {
     revokeSession,
-    touchSession,
 } from './session.repository.js';
-import { sessionCookieOptions } from './session-cookie.js';
+import {
+    clearSessionCookieOptions,
+    sessionCookieOptions,
+} from './session-cookie.js';
 
 const loginBodySchema = z.object({
     email: z.string().email(),
@@ -19,10 +23,10 @@ const loginBodySchema = z.object({
 });
 
 function clearSessionCookie(response: Response): void {
-    response.clearCookie(env.SESSION_COOKIE_NAME, {
-        ...sessionCookieOptions,
-        maxAge: 0,
-    });
+    response.clearCookie(
+        env.SESSION_COOKIE_NAME,
+        clearSessionCookieOptions,
+    );
 }
 
 function sendInternalError(response: Response): void {
@@ -89,43 +93,15 @@ export async function login(
     }
 }
 
-export async function getSession(
+export function getSession(
     request: Request,
     response: Response,
-    ): Promise<void> {
-    const sessionId = request.cookies[env.SESSION_COOKIE_NAME];
+): void {
+    getAuthenticatedSession(request);
 
-    if (typeof sessionId !== 'string' || sessionId.length === 0) {
-        clearSessionCookie(response);
-
-        response.status(401).json({
-        authenticated: false,
-        message: 'Session not found or expired.',
-        });
-        return;
-    }
-
-    try {
-        const session = await findActiveSession(sessionId);
-
-        if (!session) {
-        clearSessionCookie(response);
-
-        response.status(401).json({
-            authenticated: false,
-            message: 'Session not found or expired.',
-        });
-        return;
-        }
-
-        await touchSession(session.id);
-
-        response.status(200).json({
+    response.status(200).json({
         authenticated: true,
-        });
-    } catch {
-        sendInternalError(response);
-    }
+    });
 }
 
 export async function logout(

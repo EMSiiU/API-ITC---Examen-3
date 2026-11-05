@@ -188,7 +188,21 @@ Centraliza las opciones que se aplicarán al crear la cookie de sesión:
 - `maxAge`: se calcula a partir de `SESSION_TTL_HOURS`.
 - `path: '/'`: permite usar la sesión en todos los endpoints del backend.
 
-Este módulo todavía no emite cookies porque aún no existe el login real ni el repositorio de sesiones.
+Este módulo define las opciones que `auth.controller.ts` aplica al emitir la cookie después de un login exitoso. No contiene lógica de autenticación ni persiste sesiones por sí mismo.
+
+`clearSessionCookieOptions` conserva los atributos relevantes de la cookie, pero omite su duración. Lo utilizan el middleware y logout para expirar la misma cookie que se creó durante el login.
+
+### `backend/src/modules/auth/authenticated-session.middleware.ts`
+
+**Problema que resuelve:** evita que cada endpoint protegido repita la lectura de cookie, consulta de Supabase, validación de expiración/revocación, descifrado interno del JWT SII y actualización de actividad.
+
+**Por qué existe:** concentra la política de acceso en una sola función reutilizable. Esto reduce el riesgo de que una ruta académica futura olvide validar sesión antes de consultar datos institucionales.
+
+**Entradas y salidas:** recibe una petición que debe incluir la cookie definida por `SESSION_COOKIE_NAME`. Si no existe, está revocada o venció, borra la cookie y responde `401`. Si es válida, adjunta un `ActiveSession` interno a `request.authSession`, actualiza `last_seen_at` y entrega el control al siguiente controlador. Ante un fallo de infraestructura responde `500` sin exponer detalles.
+
+**Conexiones:** usa `session.repository.ts` para recuperar y tocar la sesión, `session-cookie.ts` para borrar la cookie con los mismos atributos y `env.ts` para conocer el nombre de cookie. Los controladores posteriores obtienen la sesión validada mediante `getAuthenticatedSession`.
+
+**Pendiente y consumidor futuro:** actualmente protege `GET /auth/session`. Emilio lo reutilizará para perfil y kardex; Rebo se beneficiará indirectamente cuando el frontend use endpoints protegidos de calificaciones, horario y planificador.
 
 ### `backend/src/modules/auth/token-crypto.ts`
 
@@ -258,7 +272,7 @@ No existe todavía un controlador HTTP que invoque este servicio; por lo tanto, 
 
 **Por qué existe:** un `Router` de Express permite agrupar funcionalidades relacionadas y montarlas con un prefijo. Esto facilita agregar middleware específico de autenticación en el futuro sin afectar rutas académicas u otros módulos.
 
-**Entradas y salidas:** no procesa datos por sí mismo; enruta `POST /login`, `GET /session` y `POST /logout` a sus controladores. Al montarse con el prefijo `/auth`, las rutas públicas finales son `POST /auth/login`, `GET /auth/session` y `POST /auth/logout`.
+**Entradas y salidas:** no procesa datos por sí mismo; enruta `POST /login`, `GET /session` y `POST /logout` a sus controladores. `GET /session` pasa antes por `requireAuthenticatedSession`. Al montarse con el prefijo `/auth`, las rutas públicas finales son `POST /auth/login`, `GET /auth/session` y `POST /auth/logout`.
 
 **Conexiones:** importa los controladores de `auth.controller.ts` y es montado desde `app.ts` mediante `app.use('/auth', authRouter)`.
 
@@ -275,12 +289,12 @@ No existe todavía un controlador HTTP que invoque este servicio; por lo tanto, 
 | Función | Entrada | Salida HTTP | Persistencia/efecto |
 |---|---|---|---|
 | `login` | JSON `{ email, password }` | `200 { authenticated: true }`; `400`, `401`, `502`, `503` o `500` en error | Pide autenticación al servicio; en éxito establece la cookie con el ID de sesión. |
-| `getSession` | Cookie `pta_session` u otro nombre configurado | `200 { authenticated: true }` o `401` | Consulta la sesión activa y actualiza `last_seen_at`; no devuelve JWT SII. |
+| `getSession` | Sesión previamente validada por middleware | `200 { authenticated: true }` | No consulta ni expone el JWT; usa la sesión interna ya adjuntada a la petición. |
 | `logout` | Cookie de sesión opcional | `204` o `500` | Revoca la sesión existente y elimina la cookie en el navegador. |
 | `clearSessionCookie` | Objeto `Response` | No devuelve cuerpo | Expira la cookie usando los mismos atributos de seguridad. |
 | `sendSiiError` | Error interno `SiiApiError` | `401`, `502` o `503` con mensaje seguro | Oculta detalles de red y respuesta de SII ITC. |
 
-**Conexiones:** `login` invoca `authenticateWithSii`, el cual usa `sii.client.ts` y `session.repository.ts`. `getSession` y `logout` usan el repositorio de sesiones. Las opciones de cookie provienen de `session-cookie.ts`; el nombre viene de `env.ts`.
+**Conexiones:** `login` invoca `authenticateWithSii`, el cual usa `sii.client.ts` y `session.repository.ts`. `getSession` recibe una sesión ya validada por `authenticated-session.middleware.ts`; `logout` usa el repositorio para revocar. Las opciones de cookie provienen de `session-cookie.ts`; el nombre viene de `env.ts`.
 
 **Pendiente y consumidor futuro:** el frontend de Rebo utilizará estos endpoints desde su servicio de API. Aún falta conectar el formulario React, probar login institucional real de manera autorizada y crear un middleware reutilizable que proteja rutas académicas.
 
@@ -422,10 +436,18 @@ feature/auth-backend-sii-sessions
 - Se eliminó la ejecución duplicada de `cookieParser()`.
 - Se comprobó que `GET /auth/session` pasó de responder `404` a ser manejado por la capa de autenticación; sin cookie válida debe responder `401`.
 
+### Middleware de sesión autenticada
+
+- Se creó `authenticated-session.middleware.ts` como capa reutilizable de protección de rutas.
+- Se movió la validación de sesión, expiración y revocación fuera de `getSession` para evitar lógica duplicada.
+- Una sesión válida se conserva solo en memoria del backend como `request.authSession`; el frontend no recibe el JWT institucional.
+- `GET /auth/session` utiliza el middleware y funciona como prueba de integración de esta capa.
+- Se centralizaron las opciones de borrado de cookie para que logout y las sesiones inválidas usen los mismos atributos de seguridad.
+
 ## Próximo cambio previsto
 
-El siguiente conjunto de cambios deberá implementar los controladores y rutas HTTP de autenticación. Antes de implementarlo se deberá documentar:
+El siguiente conjunto de cambios deberá implementar el cliente autenticado de datos académicos y el primer endpoint protegido de estudiante. Antes de implementarlo se deberá documentar:
 
-- Contrato de `POST /auth/login`, `GET /auth/session` y `POST /auth/logout`.
-- Emisión y borrado de la cookie `httpOnly` mediante los controladores HTTP.
-- Conversión segura de errores internos a respuestas HTTP sin revelar detalles institucionales.
+- Cómo se añade el JWT institucional exclusivamente al header `Authorization` en el backend.
+- Contrato y validación de `GET /student/profile`.
+- Manejo de errores SII en rutas protegidas y la separación entre información institucional y datos propios.
