@@ -116,8 +116,9 @@ Para producción, la cookie debe usar `Secure=true`. Si frontend y backend se ma
 - `GET /auth/session`, `POST /auth/logout` y middleware reutilizable de sesión.
 - `GET /student/profile`, protegido por sesión y conectado al endpoint real de perfil SII.
 - DTO `StudentProfile` que valida y normaliza la respuesta institucional mediante Zod antes de entregarla al frontend.
-- `GET /student/grades` protegido, conectado a SII y normalizado mediante `StudentGrades`. Emilio compartió la respuesta autenticada normalizada; se comprobó que coincide con el DTO. Falta verificar HTTP sin cookie y confirmar el origen de la nota final oficial.
-- `GET /student/kardex` protegido, conectado a SII y normalizado por `student-kardex.dto.ts`. La consulta real devolvió `200` en Postman antes de normalizar; el DTO pasó las pruebas con la respuesta completa adjunta. Falta confirmar manualmente la respuesta final del endpoint y su rechazo sin cookie.
+- `GET /student/grades` protegido, conectado a SII y normalizado mediante `StudentGrades`. Emilio compartió la respuesta autenticada normalizada; se comprobó que coincide con el DTO. HTTP sin cookie devuelve `401`; falta confirmar el origen de la nota final oficial.
+- `GET /student/kardex` protegido, conectado a SII y normalizado por `student-kardex.dto.ts`. La consulta real devolvió `200` en Postman antes de normalizar; el DTO pasó las pruebas con la respuesta completa adjunta. HTTP sin cookie devuelve `401`; falta confirmación explícita de la respuesta autenticada normalizada final.
+- `GET /student/schedule` protegido, consulta institucional y DTO `StudentSchedule`. El doble envío del controlador fue corregido; Emilio confirmó que sigue funcionando y la prueba HTTP sin cookie devuelve `401`.
 - CORS restringido a `FRONTEND_ORIGIN`, con credenciales habilitadas.
 
 Detalles de integración confirmados que Rebo no debe sustituir ni exponer:
@@ -145,7 +146,11 @@ Contrato de calificaciones disponible: `200 { grades: { periods: [...] } }`. Cad
 
 Rebo debe mostrar “Pendiente” cuando `gradeLabel` sea `null`, conservar etiquetas textuales si aparecen y no colorear una nota ausente como cero. El JSON revisado no identifica una calificación final oficial; el equipo debe confirmar ese dato antes de dar por cumplido el requisito del PDF. No presentar una media de evaluaciones como nota oficial ni asumir que la última evaluación es la final.
 
-Siguiente paso inmediato de Emilio: comprobar calificaciones sin cookie y cerrar el conjunto de cambios. La siguiente integración prevista es horario, con DTO basado en la respuesta real. Coordinar después las pantallas de dashboard/Kardex y la entrega de contratos a Rebo; no comenzar automáticamente la siguiente fase.
+Contrato de horario implementado: `200 { schedule: { periods: [...] } }`. Cada período tiene `code`, `year`, `description` y `subjects`. Cada materia tiene `groupId`, `group`, `name`, `code`, `shiftCode`, `programName`, `levelCode` y `sessions`. Cada sesión tiene `day` (1=lunes a 6=sábado), `startTime`, `endTime` en formato local `HH:mm` y `classroom: string | null`. Días sin horario no generan sesiones; una materia sin sesiones se conserva. Un bloque de dos horas cuenta como una sesión, sin dividirse ni convertirse a UTC. Rebo debe agrupar/ordenar para mostrar la agenda; no se ha implementado detección de traslapes.
+
+El DTO de horario pasó pruebas aisladas de días, horas y valores nulos. Emilio corrigió la respuesta duplicada de `getSchedule` y confirmó que sigue funcionando. La revisión constató un solo envío y `npm run check` pasó. También se verificó por HTTP `401` sin cookie en los cuatro endpoints académicos, sin usar credenciales institucionales.
+
+Siguiente tarea de Emilio tras cerrar el conjunto de horario: preparar el dashboard React con `/student/profile`, tipo frontend del DTO, indicadores de créditos/avance/promedios y estados de carga/error/datos ausentes. Coordinar previamente con Rebo su cliente HTTP, rutas privadas y navegación: reutilizar esa base y no implementar otro login. El frontend local revisado sigue siendo la plantilla Vite; Rebo puede tener avances en una rama separada que deberán revisarse antes de modificar la base compartida. Después seguirá Kardex frontend. No comenzar automáticamente la siguiente fase.
 
 Rebo debe partir de `main` actualizado y verificar que los Pull Requests de Emilio estén fusionados antes de conectar el frontend. No debe editar módulos backend de Emilio sin coordinación.
 
@@ -207,7 +212,7 @@ Direcciones locales esperadas:
 
 ## Contratos de API actuales y previstos
 
-Los endpoints de autenticación, perfil, Kardex y calificaciones están implementados; horario y funcionalidad adicional siguen pendientes. La nota final oficial de calificaciones aún requiere confirmación. Rebo debe coordinar cualquier cambio de contrato con Emilio.
+Los endpoints de autenticación, perfil, Kardex, calificaciones y horario están implementados. Las cuatro rutas académicas rechazan solicitudes sin cookie con `401`. La funcionalidad adicional sigue pendiente de elección y la nota final oficial de calificaciones requiere confirmación. Rebo debe coordinar cualquier cambio de contrato con Emilio.
 
 | Método y ruta | Solicitud | Respuesta esperada | Responsable |
 |---|---|---|---|
@@ -217,7 +222,7 @@ Los endpoints de autenticación, perfil, Kardex y calificaciones están implemen
 | `GET /student/profile` | Cookie de sesión | `200 { profile: StudentProfile }` normalizado | Emilio |
 | `GET /student/grades` | Cookie de sesión | `200 { grades: StudentGrades }`; períodos, materias y evaluaciones normalizadas | Emilio |
 | `GET /student/kardex` | Cookie de sesión | `200 { kardex: StudentKardex }` normalizado; confirmación HTTP final pendiente | Emilio |
-| `GET /student/schedule` (pendiente) | Cookie de sesión | Horario desde SII; DTO por confirmar | Emilio |
+| `GET /student/schedule` | Cookie de sesión | `200 { schedule: StudentSchedule }`; `401` sin cookie | Emilio |
 | Rutas de funcionalidad adicional | Por definir | Por definir tras seleccionar propuesta | Ambos |
 
 El contrato de perfil anterior ya está implementado; los contratos pendientes deben acordarse antes de conectar sus pantallas. Rebo no debe inventar campos institucionales ni exponer tokens en la interfaz. `/auth/session` valida la sesión local; un JWT institucional inválido se detecta al consultar SII y el controlador de perfil revoca entonces la sesión y devuelve `401`.

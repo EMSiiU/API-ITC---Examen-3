@@ -222,3 +222,56 @@ export async function getStudentGrades(
 
     return grades;
 }
+
+//Funcion que devuelve el horario
+export async function getStudentSchedule(
+    siiToken: string,
+): Promise<unknown> {
+    let response: Response;
+
+    try {
+        response = await fetch(
+            siiUrl('/api/movil/estudiante/horarios'),
+            {
+                method: 'GET',
+                headers: {
+                    Accept: 'application/json',
+                    Authorization: `Bearer ${siiToken}`,
+                },
+                signal: AbortSignal.timeout(
+                    env.SII_REQUEST_TIMEOUT_MS,
+                ),
+            },
+        );
+    } catch {
+        throw new SiiApiError(
+            'unavailable',
+            'The institutional service is unavailable.',
+        );
+    }
+
+    if (response.status === 401 || response.status === 403) {
+        throw new SiiApiError(
+            'invalid_session',
+            'The institutional session is no longer valid.',
+        );
+    }
+
+    if (!response.ok) {
+        throw new SiiApiError(
+            'unavailable',
+            'The institutional service could not process the request.',
+        );
+    }
+
+    const schedule: unknown = await response.json().catch(() => null);
+
+    if (schedule === null) {
+        throw new SiiApiError(
+            'invalid_response',
+            'The institutional service returned an invalid response.',
+        );
+    }
+
+    return schedule;
+}

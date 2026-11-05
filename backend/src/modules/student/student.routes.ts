@@ -8,6 +8,7 @@ import {
     getProfile,
     getKardex,
     getGrades,
+    getSchedule,
 } from './student.controller.js';
 
 export const studentRouter = Router();
@@ -28,4 +29,10 @@ studentRouter.get(
     '/grades',
     requireAuthenticatedSession,
     getGrades,
+);
+
+studentRouter.get(
+    '/schedule',
+    requireAuthenticatedSession,
+    getSchedule,
 );
