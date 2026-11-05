@@ -116,6 +116,7 @@ Para producción, la cookie debe usar `Secure=true`. Si frontend y backend se ma
 - `GET /auth/session`, `POST /auth/logout` y middleware reutilizable de sesión.
 - `GET /student/profile`, protegido por sesión y conectado al endpoint real de perfil SII.
 - DTO `StudentProfile` que valida y normaliza la respuesta institucional mediante Zod antes de entregarla al frontend.
+- `GET /student/grades` protegido, conectado a SII y normalizado mediante `StudentGrades`. Emilio compartió la respuesta autenticada normalizada; se comprobó que coincide con el DTO. Falta verificar HTTP sin cookie y confirmar el origen de la nota final oficial.
 - `GET /student/kardex` protegido, conectado a SII y normalizado por `student-kardex.dto.ts`. La consulta real devolvió `200` en Postman antes de normalizar; el DTO pasó las pruebas con la respuesta completa adjunta. Falta confirmar manualmente la respuesta final del endpoint y su rechazo sin cookie.
 - CORS restringido a `FRONTEND_ORIGIN`, con credenciales habilitadas.
 
@@ -140,7 +141,11 @@ Validaciones realizadas: compilación backend y prueba aislada del DTO con datos
 
 Contrato de Kardex disponible: `200 { kardex: { progressPercentage: number, subjects: KardexSubject[] } }`. Cada registro contiene `name`, `code`, `period`, `credits`, `grade`, `gradeLabel`, `evaluationDescription` y `semester`. `credits`, `semester` y las notas numéricas se convierten a números; `grade` es `number | null`, mientras que `gradeLabel` siempre es texto para mostrarlo. Se encontró `AC` en la respuesta real: se conserva como etiqueta con `grade: null`, sin asignarle un valor numérico. Los períodos como `26/V` se conservan como texto. La lista mantiene todos los intentos y el orden de SII; ya no se debe buscar `kardex.data.kardex` desde React.
 
-Siguiente paso inmediato de Emilio: comprobar el endpoint normalizado en Postman antes del commit. Después coordinar el dashboard y Kardex frontend y las integraciones pendientes de calificaciones y horario. No comenzar automáticamente la siguiente fase.
+Contrato de calificaciones disponible: `200 { grades: { periods: [...] } }`. Cada período tiene `code`, `year`, `description` y `subjects`. Cada materia tiene `groupId`, `name`, `code`, `group` y `assessments`. Cada evaluación tiene `id`, `number`, `grade: number | null` y `gradeLabel: string | null`. La respuesta real revisada contiene un período, cuatro materias y 16 evaluaciones, ocho pendientes; esas cantidades son datos de prueba, no límites del contrato. Se conserva el orden institucional. `calificaiones` es el nombre original de SII y se traduce a `assessments`.
+
+Rebo debe mostrar “Pendiente” cuando `gradeLabel` sea `null`, conservar etiquetas textuales si aparecen y no colorear una nota ausente como cero. El JSON revisado no identifica una calificación final oficial; el equipo debe confirmar ese dato antes de dar por cumplido el requisito del PDF. No presentar una media de evaluaciones como nota oficial ni asumir que la última evaluación es la final.
+
+Siguiente paso inmediato de Emilio: comprobar calificaciones sin cookie y cerrar el conjunto de cambios. La siguiente integración prevista es horario, con DTO basado en la respuesta real. Coordinar después las pantallas de dashboard/Kardex y la entrega de contratos a Rebo; no comenzar automáticamente la siguiente fase.
 
 Rebo debe partir de `main` actualizado y verificar que los Pull Requests de Emilio estén fusionados antes de conectar el frontend. No debe editar módulos backend de Emilio sin coordinación.
 
@@ -202,7 +207,7 @@ Direcciones locales esperadas:
 
 ## Contratos de API actuales y previstos
 
-Los endpoints de autenticación, perfil y Kardex están implementados; calificaciones, horario y funcionalidad adicional siguen pendientes. Rebo debe coordinar cualquier cambio de contrato con Emilio.
+Los endpoints de autenticación, perfil, Kardex y calificaciones están implementados; horario y funcionalidad adicional siguen pendientes. La nota final oficial de calificaciones aún requiere confirmación. Rebo debe coordinar cualquier cambio de contrato con Emilio.
 
 | Método y ruta | Solicitud | Respuesta esperada | Responsable |
 |---|---|---|---|
@@ -210,7 +215,7 @@ Los endpoints de autenticación, perfil y Kardex están implementados; calificac
 | `GET /auth/session` | Cookie enviada automáticamente | `200 { authenticated: true }`; `401` sin sesión válida | Emilio |
 | `POST /auth/logout` | Cookie de sesión | Revoca sesión, elimina cookie y devuelve `204` | Emilio |
 | `GET /student/profile` | Cookie de sesión | `200 { profile: StudentProfile }` normalizado | Emilio |
-| `GET /student/grades` (pendiente) | Cookie de sesión | Calificaciones desde SII; DTO por confirmar | Emilio |
+| `GET /student/grades` | Cookie de sesión | `200 { grades: StudentGrades }`; períodos, materias y evaluaciones normalizadas | Emilio |
 | `GET /student/kardex` | Cookie de sesión | `200 { kardex: StudentKardex }` normalizado; confirmación HTTP final pendiente | Emilio |
 | `GET /student/schedule` (pendiente) | Cookie de sesión | Horario desde SII; DTO por confirmar | Emilio |
 | Rutas de funcionalidad adicional | Por definir | Por definir tras seleccionar propuesta | Ambos |
