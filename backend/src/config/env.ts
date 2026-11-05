@@ -16,6 +16,8 @@ const envSchema = z.object({
     (value) => Buffer.from(value, 'base64').length === 32,
     'SII_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes.',
   ),
+  SII_API_BASE_URL: z.string().url(),
+  SII_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().max(30000).default(10000),
 });
 
 const parsed = envSchema.safeParse(process.env);
