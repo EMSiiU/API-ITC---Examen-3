@@ -70,3 +70,49 @@ export async function loginWithSii(
 
     return parsed.data.message.login.token;
 }
+
+export async function getStudentProfile(
+    siiToken: string,
+): Promise<unknown> {
+    let response: Response;
+
+    try {
+        response = await fetch(siiUrl('/api/movil/estudiante'), {
+        headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${siiToken}`,
+        },
+        signal: AbortSignal.timeout(env.SII_REQUEST_TIMEOUT_MS),
+        });
+    } catch {
+        throw new SiiApiError(
+        'unavailable',
+        'The institutional service is unavailable.',
+        );
+    }
+
+    if (response.status === 401 || response.status === 403) {
+        throw new SiiApiError(
+        'invalid_session',
+        'The institutional session is no longer valid.',
+        );
+    }
+
+    if (!response.ok) {
+        throw new SiiApiError(
+        'unavailable',
+        'The institutional service could not process the request.',
+        );
+    }
+
+    const profile: unknown = await response.json().catch(() => null);
+
+    if (profile === null) {
+        throw new SiiApiError(
+        'invalid_response',
+        'The institutional service returned an invalid response.',
+        );
+    }
+
+    return profile;
+}

@@ -1,4 +1,4 @@
-# Documentación técnica - Planificador Inteligente de Trayectoria Académica
+# Documentación técnica - Aplicación Académica SII ITC (Examen 3)
 
 Este documento describe el estado técnico completo del proyecto. Es el punto de referencia para entender su arquitectura, estructura, decisiones, variables, funciones y flujo de datos.
 
@@ -25,7 +25,7 @@ Para cada código que se agregue o cambie de forma relevante, esta documentació
 
 ## Estado actual
 
-El proyecto ya cuenta con la estructura inicial del monorepo, la base de seguridad para la autenticación y la conexión de servidor a Supabase. Aún no se conecta a la API del SII ITC, no persiste sesiones desde endpoints y no se han implementado las pantallas funcionales.
+El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante backend propio, sesiones cifradas en Supabase y un endpoint protegido de perfil. Aún no se han implementado las pantallas funcionales ni los demás endpoints académicos.
 
 ### Implementado
 
@@ -38,15 +38,16 @@ El proyecto ya cuenta con la estructura inicial del monorepo, la base de segurid
 - Validación de variables de entorno del backend.
 - Cliente de Supabase exclusivo de backend.
 - Tabla `public.app_sessions` disponible en Supabase para persistir sesiones futuras.
+- Login real SII ITC, cookie `httpOnly`, revocación y middleware reutilizable de sesión.
+- Endpoint protegido `GET /student/profile` conectado a SII ITC.
 - Compilación y validación de tipos exitosas.
 
 ### Pendiente
 
 - Rutas y componentes de interfaz.
-- Autenticación real mediante el backend y SII ITC.
-- Repositorio interno de sesiones en Supabase PostgreSQL, con cifrado del token institucional.
-- Integración y prueba real de login, perfil, calificaciones, kardex y horario con SII ITC.
-- Planificador Inteligente de Trayectoria Académica.
+- Integración y prueba real de calificaciones, kardex y horario con SII ITC.
+- Dashboard y pantallas frontend.
+- Seleccionar y justificar la funcionalidad adicional de impacto; el planificador es solo una propuesta por ahora.
 - Pruebas, despliegue en Render y documentación visual.
 
 ## Arquitectura
@@ -74,11 +75,11 @@ El frontend nunca se comunica directamente con la API institucional SII ITC. Tod
 1. El usuario envía correo y contraseña al endpoint propio `POST /auth/login` mediante HTTPS.
 2. El backend consulta el login de SII ITC.
 3. El backend guarda el JWT institucional únicamente del lado servidor, asociado a una sesión propia.
-4. El backend devolverá una cookie con un identificador de sesión aleatorio. La cookie no contendrá el JWT institucional.
-5. En peticiones posteriores, el navegador enviará la cookie al backend y este recuperará la sesión antes de consultar SII ITC.
+4. El backend devuelve una cookie con un identificador de sesión aleatorio. La cookie no contiene el JWT institucional.
+5. En peticiones posteriores, el navegador envía la cookie al backend y este recupera la sesión antes de consultar SII ITC.
 6. Al cerrar sesión, el backend invalida la sesión y elimina la cookie.
 
-La tabla de sesiones, el cliente de Supabase y el repositorio interno ya están preparados. El repositorio cifra el JWT institucional antes de guardarlo. Todavía falta integrar este repositorio con el cliente SII, los controladores HTTP y la cookie emitida al navegador.
+La tabla de sesiones, el cliente de Supabase, el repositorio interno, los controladores HTTP y la cookie ya están integrados. El repositorio cifra el JWT institucional antes de guardarlo.
 
 ### Tabla `public.app_sessions`
 
@@ -106,8 +107,10 @@ La tabla tiene RLS habilitado. Los roles `anon` y `authenticated` no tienen perm
 │   │   ├── app.ts             # Configuración de Express, CORS y middleware
 │   │   ├── server.ts          # Inicio del servidor HTTP
 │   │   ├── config/env.ts      # Validación y lectura de variables de entorno
-│   │   └── modules/auth/
-│   │       └── session-cookie.ts # Opciones seguras para la cookie de sesión
+│   │   └── modules/
+│   │       ├── auth/            # Sesión, cifrado, controladores y middleware
+│   │       ├── sii/             # Cliente exclusivo de SII ITC
+│   │       └── student/         # Endpoints académicos protegidos
 │   ├── .env.example           # Plantilla sin secretos
 │   ├── package.json
 │   └── tsconfig.json
@@ -167,6 +170,7 @@ Configura el comportamiento común del servidor:
 - CORS permite únicamente `FRONTEND_ORIGIN` y habilita credenciales.
 - El cuerpo JSON se limita a `16kb`, suficiente para credenciales y peticiones normales, reduciendo peticiones excesivas.
 - `cookie-parser` permite inspeccionar la cookie de sesión en rutas protegidas futuras.
+- Monta `authRouter` bajo `/auth` y `studentRouter` bajo `/student`.
 - `GET /health` responde `200` con `{ "status": "ok" }`; sirve para validar que el backend está disponible localmente y en Render.
 
 ### `backend/src/config/env.ts`
@@ -235,12 +239,13 @@ Define errores internos y seguros para el cliente institucional. Los códigos pe
 | Código | Significado |
 |---|---|
 | `invalid_credentials` | SII ITC rechazó las credenciales. |
+| `invalid_session` | El JWT institucional asociado a una sesión local ya no es válido. |
 | `unavailable` | No fue posible comunicarse con SII ITC o respondió con un error no recuperable. |
 | `invalid_response` | SII ITC respondió exitosamente, pero el formato recibido no contiene el token esperado. |
 
 ### `backend/src/modules/sii/sii.client.ts`
 
-Es el cliente exclusivo del backend para iniciar sesión en SII ITC. Su función `loginWithSii`:
+Es el cliente exclusivo del backend para comunicarse con SII ITC. La función `loginWithSii`:
 
 - Envía correo y contraseña a `POST /api/login` usando la URL configurada en `SII_API_BASE_URL`.
 - Establece `Accept` y `Content-Type` como `application/json`.
@@ -254,6 +259,8 @@ El formato real confirmado del login institucional contiene el JWT en `message.l
 
 El cliente no registra ni reenvía credenciales, tokens ni respuestas institucionales al navegador.
 
+La función `getStudentProfile` recibe el JWT SII exclusivamente desde una sesión interna y lo adjunta al header `Authorization: Bearer <token>` para consultar `GET /api/movil/estudiante`. Si SII responde `401` o `403`, genera `invalid_session`; el controlador revoca entonces la sesión local y borra su cookie.
+
 ### `backend/src/modules/auth/authentication.service.ts`
 
 Orquesta el flujo de inicio de sesión del lado servidor:
@@ -264,7 +271,7 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 4. Calcula la expiración según `SESSION_TTL_HOURS`.
 5. Crea la sesión mediante `createSession`, que cifra el JWT antes de persistirlo en Supabase.
 
-No existe todavía un controlador HTTP que invoque este servicio; por lo tanto, ninguna cookie se emite todavía y el frontend no puede autenticarse aún.
+`auth.controller.ts` invoca este servicio desde `POST /auth/login` y emite una cookie `httpOnly` si el proceso termina correctamente.
 
 ### `backend/src/modules/auth/auth.routes.ts`
 
@@ -296,19 +303,43 @@ No existe todavía un controlador HTTP que invoque este servicio; por lo tanto, 
 
 **Conexiones:** `login` invoca `authenticateWithSii`, el cual usa `sii.client.ts` y `session.repository.ts`. `getSession` recibe una sesión ya validada por `authenticated-session.middleware.ts`; `logout` usa el repositorio para revocar. Las opciones de cookie provienen de `session-cookie.ts`; el nombre viene de `env.ts`.
 
-**Pendiente y consumidor futuro:** el frontend de Rebo utilizará estos endpoints desde su servicio de API. Aún falta conectar el formulario React, probar login institucional real de manera autorizada y crear un middleware reutilizable que proteja rutas académicas.
+**Pendiente y consumidor futuro:** el frontend de Rebo utilizará estos endpoints desde su servicio de API. Falta conectar su formulario React; el login institucional y el middleware reutilizable ya se probaron localmente.
 
 ### Montaje en `backend/src/app.ts`
 
 **Problema que resuelve:** evita respuestas `404` al hacer que Express conozca el router de autenticación.
 
-**Por qué existe:** importar un router no basta; `app.use('/auth', authRouter)` lo incorpora al ciclo de solicitudes de Express. También se mantiene una sola ejecución de `cookieParser()`, suficiente para leer la cookie en todos los controladores.
+**Por qué existe:** importar un router no basta; `app.use('/auth', authRouter)` y `app.use('/student', studentRouter)` los incorporan al ciclo de solicitudes de Express. También se mantiene una sola ejecución de `cookieParser()`, suficiente para leer la cookie en todos los controladores.
 
-**Entradas y salidas:** recibe todas las solicitudes cuyo path inicia con `/auth` y las delega al router. No produce respuestas propias para esas rutas; cada controlador decide su respuesta.
+**Entradas y salidas:** recibe las solicitudes cuyo path inicia con `/auth` o `/student` y las delega al router correspondiente. No produce respuestas propias para esas rutas; cada controlador decide su respuesta.
 
-**Conexiones:** se ejecuta después de CORS, JSON y `cookieParser`, por lo que el router recibe cuerpos JSON y cookies ya procesados. Conecta `app.ts` con `auth.routes.ts`.
+**Conexiones:** se ejecuta después de CORS, JSON y `cookieParser`, por lo que los routers reciben cuerpos JSON y cookies ya procesados. Conecta `app.ts` con `auth.routes.ts` y `student.routes.ts`.
 
-**Pendiente y consumidor futuro:** será la base de todos los clientes frontend y de las pruebas manuales de API. Las rutas de estudiante se montarán posteriormente de forma similar, posiblemente bajo `/student`.
+**Pendiente y consumidor futuro:** es la base de todos los clientes frontend y de las pruebas manuales de API. Se montarán aquí las siguientes rutas académicas protegidas.
+
+### `backend/src/modules/student/student.routes.ts`
+
+**Problema que resuelve:** agrupa las rutas académicas de estudiante y garantiza que las rutas registradas tengan sesión válida antes de alcanzar el controlador.
+
+**Por qué existe:** separa el dominio académico del dominio de autenticación y permitirá añadir perfil, kardex, calificaciones y horario sin alterar `app.ts` ni repetir la protección de sesión.
+
+**Entradas y salidas:** registra `GET /profile`; montado bajo `/student`, expone `GET /student/profile`. Requiere la cookie de sesión y delega al controlador solo después de `requireAuthenticatedSession`.
+
+**Conexiones:** importa el middleware de autenticación y `getProfile` desde `student.controller.ts`; `app.ts` lo monta bajo `/student`.
+
+**Pendiente y consumidor futuro:** Emilio añadirá kardex en este router. Rebo consumirá perfil, calificaciones y horario desde el frontend cuando estén disponibles.
+
+### `backend/src/modules/student/student.controller.ts`
+
+**Problema que resuelve:** presenta el perfil institucional mediante un endpoint propio, sin que React necesite conocer ni usar el JWT de SII.
+
+**Por qué existe:** convierte la sesión interna validada en una consulta autorizada a SII y centraliza el manejo seguro de respuesta, sesión institucional vencida e indisponibilidad del servicio.
+
+**Entradas y salidas:** recibe una petición ya autorizada por middleware. Devuelve `200 { profile: ... }` con la respuesta institucional; puede devolver `401` si el JWT SII expiró, `502` ante JSON institucional inválido, `503` cuando SII no está disponible o `500` ante error interno. No devuelve el JWT.
+
+**Conexiones:** obtiene `siiToken` desde `getAuthenticatedSession`, consulta `getStudentProfile` en `sii.client.ts`, y en caso de token inválido usa `revokeSession` y `clearSessionCookieOptions`.
+
+**Pendiente y consumidor futuro:** la respuesta actual mantiene el formato oficial dentro de `profile`. El siguiente paso definirá un DTO tipado y estable para que el dashboard de Emilio y el frontend de Rebo no dependan de nombres crudos del SII.
 
 ### `backend/src/lib/supabase.ts`
 
@@ -370,10 +401,10 @@ Respuesta esperada:
 - Los cambios se revisan mediante Pull Request antes de integrarse a `main`.
 - No se realizan commits automáticos por el asistente; cada integrante crea sus propios commits.
 
-Rama actual sugerida para el módulo en curso:
+Rama sugerida para el módulo en curso:
 
 ```text
-feature/auth-backend-sii-sessions
+feature/student-profile-endpoint
 ```
 
 ## Historial técnico
@@ -444,10 +475,14 @@ feature/auth-backend-sii-sessions
 - `GET /auth/session` utiliza el middleware y funciona como prueba de integración de esta capa.
 - Se centralizaron las opciones de borrado de cookie para que logout y las sesiones inválidas usen los mismos atributos de seguridad.
 
+### Perfil académico protegido
+
+- Se añadió `invalid_session` para diferenciar un JWT institucional vencido de un fallo general de SII.
+- Se amplió `sii.client.ts` con `getStudentProfile`, que usa el JWT solo en el header `Authorization` del backend.
+- Se crearon `student.routes.ts` y `student.controller.ts` para exponer `GET /student/profile` detrás del middleware de sesión.
+- Se confirmó contra SII real que el perfil institucional llega bajo `profile.data`, con indicadores útiles para dashboard como semestre, promedios, créditos y avance.
+- Se validaron localmente las rutas públicas y protegidas; sin cookie, perfil devuelve `401` sin contactar SII.
+
 ## Próximo cambio previsto
 
-El siguiente conjunto de cambios deberá implementar el cliente autenticado de datos académicos y el primer endpoint protegido de estudiante. Antes de implementarlo se deberá documentar:
-
-- Cómo se añade el JWT institucional exclusivamente al header `Authorization` en el backend.
-- Contrato y validación de `GET /student/profile`.
-- Manejo de errores SII en rutas protegidas y la separación entre información institucional y datos propios.
+El siguiente conjunto de cambios deberá normalizar el perfil a un DTO tipado para dashboard o implementar el endpoint de kardex. Antes de implementarlo se deberá documentar el contrato definitivo que consumirá React, sin incluir datos personales de prueba.

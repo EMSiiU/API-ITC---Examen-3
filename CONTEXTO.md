@@ -6,8 +6,8 @@ Este archivo permite que Rebo entregue a un agente de IA el contexto suficiente 
 
 | Integrante | Identificador en este documento | Responsabilidades |
 |---|---|---|
-| Emilio | `Emilio` | Fundamentos, integración backend SII y sesiones, dashboard y kardex, motor de análisis/simulación, seguridad/pruebas API/despliegue, arquitectura/backend en exposición. |
-| Rebo | `Rebo` | Revisión de diseño/dependencias/requisitos, login y protección de rutas frontend, calificaciones y horario, persistencia/gestión/interfaz del planificador, pruebas UI/responsive/documentación, frontend/funcionalidad extra en exposición. |
+| Emilio | `Emilio` | Fundamentos, integración backend SII y sesiones, dashboard y kardex, seguridad/pruebas API/despliegue, arquitectura/backend en exposición y colaboración en la funcionalidad adicional que el equipo elija. |
+| Rebo | `Rebo` | Revisión de diseño/dependencias/requisitos, login y protección de rutas frontend, calificaciones y horario, interfaz/persistencia de la funcionalidad adicional que el equipo elija, pruebas UI/responsive/documentación y frontend en exposición. |
 
 ## Regla crítica para el agente de IA
 
@@ -26,7 +26,7 @@ Rebo ejecuta esos comandos personalmente, revisa los cambios y abre el Pull Requ
 
 ## Proyecto
 
-- Nombre: **Planificador Inteligente de Trayectoria Académica**.
+- Nombre provisional: **Aplicación Académica SII ITC (Examen 3)**. La funcionalidad adicional y el nombre final siguen pendientes de decisión.
 - Ubicación local: `C:\Escuela\9no_semestre\TOPWEB\Examen3`.
 - Repositorio: monorepo npm con `frontend/` y `backend/`.
 - Rama estable: `main`.
@@ -48,7 +48,7 @@ La aplicación debe usar datos reales de la API institucional SII ITC para login
 
 **El frontend nunca debe comunicarse directamente con la API del SII ITC.** Solo puede llamar al backend propio. El backend será el único componente autorizado para consultar SII ITC.
 
-La funcionalidad adicional sí puede incluir datos simulados si no existen datos suficientes: el Planificador Inteligente de Trayectoria Académica tendrá su propia persistencia y backend de administración.
+La funcionalidad adicional sí puede incluir datos simulados si no existen datos suficientes. El equipo todavía no ha seleccionado esa funcionalidad; el Planificador Inteligente de Trayectoria Académica es solamente una propuesta y no debe implementarse ni presentarse como decisión final.
 
 ## Arquitectura acordada
 
@@ -61,7 +61,7 @@ Frontend React + Vite + TypeScript (Render Static Site)
   ▼
 Backend Node.js + Express + TypeScript (Render Web Service)
   ├── API SII ITC: autenticación y datos académicos oficiales
-  └── Supabase PostgreSQL: sesiones y datos propios del planificador
+  └── Supabase PostgreSQL: sesiones y datos propios de la funcionalidad adicional elegida
 ```
 
 ### Sesiones
@@ -71,7 +71,7 @@ La sesión usa una cookie `httpOnly`.
 - El navegador no puede leerla mediante JavaScript.
 - El JWT institucional de SII nunca se entrega al frontend ni se guarda en `localStorage` o `sessionStorage`.
 - La cookie tendrá solo un identificador de sesión aleatorio.
-- El backend asociará ese identificador con el JWT institucional guardado del lado servidor, mediante Supabase cuando Emilio implemente la persistencia.
+- El backend asocia ese identificador con el JWT institucional cifrado y guardado del lado servidor, mediante Supabase.
 - El frontend deberá incluir `credentials: 'include'` al consumir el backend.
 - El backend configura CORS con origen explícito y `credentials: true`.
 
@@ -88,21 +88,21 @@ Para producción, la cookie debe usar `Secure=true`. Si frontend y backend se ma
 - Scripts npm de desarrollo, build y check.
 - README, `.gitignore`, `.node-version` y configuración TypeScript.
 
-### Cambios locales de Emilio aún sin commit
+### Backend implementado por Emilio
 
-Los siguientes cambios pertenecen a Emilio dentro del módulo de autenticación backend. Rebo no debe editarlos sin coordinación:
+- Autenticación real contra SII ITC mediante `POST /auth/login`.
+- Sesión local con cookie `httpOnly`; el JWT de SII se cifra y persiste solo en Supabase.
+- `GET /auth/session`, `POST /auth/logout` y middleware reutilizable de sesión.
+- `GET /student/profile`, protegido por sesión y conectado al endpoint real de perfil SII.
+- CORS restringido a `FRONTEND_ORIGIN`, con credenciales habilitadas.
 
-- Dependencias backend: `cors`, `cookie-parser`, `dotenv`, `zod` y sus tipos necesarios.
-- Configuración de CORS restringida a `FRONTEND_ORIGIN`, con credenciales habilitadas.
-- Lectura de cookies con `cookie-parser`.
-- Validación de variables de entorno en `backend/src/config/env.ts`.
-- Opciones centralizadas de la cookie de sesión en `backend/src/modules/auth/session-cookie.ts`.
-- Reglas de seguridad que prohíben producción sin cookie segura y `SameSite=None` sin `Secure`.
-- Actualización de `backend/.env.example`.
-- `DOCUMENTACION.md`, documentación técnica viva.
-- Este archivo `CONTEXTO.md`.
+Detalles de integración confirmados que Rebo no debe sustituir ni exponer:
 
-Hasta que Emilio confirme esos archivos, el login visual de Rebo puede construirse con componentes y estado local de formulario, pero no debe asumir que existe ya `POST /auth/login` funcionando.
+- El JWT de login SII existe en `message.login.token`, pero solo lo procesa el backend.
+- El endpoint propio de perfil responde `200 { profile: ... }`; los datos académicos útiles están bajo `profile.data`.
+- El frontend debe enviar `credentials: 'include'` y nunca administrar tokens institucionales.
+
+Rebo debe partir de `main` actualizado y verificar que los Pull Requests de Emilio estén fusionados antes de conectar el frontend. No debe editar módulos backend de Emilio sin coordinación.
 
 ## Estructura actual
 
@@ -120,13 +120,16 @@ Hasta que Emilio confirme esos archivos, el login visual de Rebo puede construir
 │   ├── src/
 │   │   ├── app.ts
 │   │   ├── server.ts
-│   │   ├── config/env.ts             # Aún sin commit
-│   │   └── modules/auth/session-cookie.ts # Aún sin commit
+│   │   ├── config/env.ts
+│   │   └── modules/
+│   │       ├── auth/                 # Login, sesión, cookie y middleware
+│   │       ├── sii/                  # Cliente institucional exclusivo de backend
+│   │       └── student/              # Perfil protegido
 │   ├── .env.example
 │   ├── package.json
 │   └── tsconfig.json
-├── DOCUMENTACION.md                  # Documentación técnica viva, aún sin commit
-├── CONTEXTO.md                       # Esta guía, aún sin commit
+├── DOCUMENTACION.md                  # Documentación técnica viva
+├── CONTEXTO.md                       # Esta guía para Rebo y su IA
 ├── package.json
 └── package-lock.json
 ```
@@ -156,18 +159,18 @@ Direcciones locales esperadas:
 
 ## Contratos de API previstos
 
-Estos contratos son objetivos acordados, no endpoints implementados todavía. Rebo debe coordinar cualquier cambio con Emilio.
+Los endpoints de autenticación y perfil están implementados; calificaciones, kardex, horario y funcionalidad adicional siguen pendientes. Rebo debe coordinar cualquier cambio de contrato con Emilio.
 
 | Método y ruta | Solicitud | Respuesta esperada | Responsable |
 |---|---|---|---|
 | `POST /auth/login` | `{ email, password }` | Cookie de sesión y `{ authenticated: true }` | Emilio |
 | `GET /auth/session` | Cookie enviada automáticamente | Estado de autenticación y datos mínimos seguros | Emilio |
 | `POST /auth/logout` | Cookie de sesión | Limpia/invalida sesión | Emilio |
-| `GET /student/profile` | Cookie de sesión | Perfil desde SII | Emilio |
+| `GET /student/profile` | Cookie de sesión | `200 { profile: ... }` desde SII | Emilio |
 | `GET /student/grades` | Cookie de sesión | Calificaciones desde SII | Emilio |
 | `GET /student/kardex` | Cookie de sesión | Kardex desde SII | Emilio |
 | `GET /student/schedule` | Cookie de sesión | Horario desde SII | Emilio |
-| `/planner/*` | Cookie de sesión | Datos propios del planificador | Ambos, con Rebo en interfaz/gestión |
+| Rutas de funcionalidad adicional | Por definir | Por definir tras seleccionar propuesta | Ambos |
 
 El formato final de las respuestas debe acordarse antes de conectar el frontend. Rebo no debe inventar campos institucionales ni exponer tokens en la interfaz.
 
@@ -191,7 +194,7 @@ Restricciones:
 - No llamar SII ITC desde React.
 - No guardar JWT institucional ni credenciales en el navegador.
 - Usar `credentials: 'include'` en las solicitudes futuras al backend.
-- Mientras `POST /auth/login` no exista, no presentar una simulación como si fuera una integración real; puede dejarse la interfaz sin conectar o usar un estado claramente temporal de desarrollo fuera de los requisitos obligatorios.
+- No presentar una simulación como si fuera integración real; el login debe consumir el backend disponible mediante `credentials: 'include'`.
 
 ### 2. Calificaciones y horario
 
@@ -204,16 +207,9 @@ Objetivo:
 - Estados de carga, error y sin datos.
 - Consumir únicamente `GET /student/grades` y `GET /student/schedule` cuando Emilio los entregue.
 
-### 3. Planificador: persistencia, gestión de planes e interfaz
+### 3. Funcionalidad adicional de impacto: pendiente de decisión
 
-Rama sugerida: `feature/planner-management-ui`.
-
-Objetivo:
-
-- Diseñar la experiencia de creación y seguimiento de metas/planes de estudio.
-- Gestionar tareas, tiempo estimado, fechas, progreso y recomendaciones.
-- Implementar la interfaz conectada a endpoints propios `/planner/*`.
-- Colaborar con Emilio en el esquema de Supabase, sin mezclar datos propios con datos oficiales de SII.
+No iniciar esta fase hasta que Emilio y Rebo seleccionen y justifiquen una propuesta. Cuando exista decisión, se definirá rama, modelo de datos, API propia e interfaz sin mezclar datos propios con datos institucionales.
 
 ### 4. Pruebas de UI, responsive y documentación
 
@@ -241,7 +237,7 @@ Este archivo no sustituye al README: el README se orienta a instalar y ejecutar;
 ## Reglas de seguridad y calidad
 
 - No subir `.env`, claves de Supabase, contraseñas, tokens JWT ni credenciales institucionales.
-- No colocar `SUPABASE_SERVICE_ROLE_KEY` en frontend ni variables con prefijo `VITE_`.
+- No colocar `SUPABASE_SECRET_KEY` en frontend ni variables con prefijo `VITE_`.
 - No registrar contraseñas ni tokens en consola, respuestas HTTP o archivos de log.
 - Usar TypeScript estricto y validar datos externos antes de procesarlos.
 - Mostrar errores claros al usuario, sin revelar detalles internos del servidor.
@@ -255,7 +251,7 @@ Rebo explicará el frontend y la funcionalidad adicional. Debe poder explicar:
 - Por qué se eligió React + Vite + TypeScript.
 - Cómo las rutas protegidas impiden mostrar datos académicos sin sesión.
 - Por qué el navegador solo habla con el backend propio.
-- Cómo la interfaz del planificador transforma datos académicos en acciones concretas para el estudiante.
+- La funcionalidad adicional finalmente elegida y su valor concreto para el estudiante.
 
 Emilio explicará arquitectura general, backend, seguridad e integración con SII.
 
