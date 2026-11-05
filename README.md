@@ -37,6 +37,8 @@ La API propia es el único punto de acceso a los datos institucionales para el f
 
 Las cuatro rutas académicas requieren una sesión válida y responden `401` sin cookie. En calificaciones se conservan las notas por parcial; un valor `null` indica una nota no disponible, no cero. Kardex conserva la calificación final institucional de cada registro de materia y período, incluidas etiquetas textuales como `AC`; no calcula una final con parciales incompletos.
 
+Las cookies con formato inválido se rechazan antes de consultar Supabase. Las mutaciones con origen de navegador ajeno al configurado devuelven `403`. Los errores de API se entregan como JSON; un cuerpo inválido produce `400`, uno mayor de 16 KB produce `413` y una ruta inexistente produce `404`.
+
 ## Requisitos locales
 
 - Node.js compatible con el proyecto: versiones 22 a 24.
@@ -97,10 +99,11 @@ Las rutas autenticadas se pueden consultar con Postman: inicia sesión en `/auth
 
 ```powershell
 npm run check
+npm test --workspace=backend
 npm run build
 ```
 
-`check` ejecuta el lint del frontend y la comprobación TypeScript del backend. `build` compila las dos aplicaciones. Las pruebas y sus alcances están registrados en [DOCUMENTACION.md](DOCUMENTACION.md).
+`check` ejecuta el lint del frontend y la comprobación TypeScript del backend. `test` ejecuta 102 comprobaciones aisladas contra Express con dependencias controladas en memoria, sin utilizar `.env`, cuentas ni servicios reales. `build` compila las dos aplicaciones. Los tres comandos pasaron. También se comprobó por separado un ciclo real de login, sesión, los cuatro recursos y logout, con rechazo de reutilización tras cerrar sesión. Las pruebas y sus alcances están registrados en [DOCUMENTACION.md](DOCUMENTACION.md).
 
 ## Capturas de funcionamiento
 

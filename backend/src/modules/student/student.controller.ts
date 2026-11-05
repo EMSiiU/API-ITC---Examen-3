@@ -44,12 +44,19 @@ export async function getProfile(
 
         if (error instanceof SiiApiError) {
         if (error.code === 'invalid_session') {
-            await revokeSession(session.id);
-
             response.clearCookie(
             env.SESSION_COOKIE_NAME,
             clearSessionCookieOptions,
             );
+
+            try {
+                await revokeSession(session.id);
+            } catch {
+                response.status(500).json({
+                    message: 'Unable to revoke the expired session.',
+                });
+                return;
+            }
 
             response.status(401).json({
             message: 'Institutional session expired.',
