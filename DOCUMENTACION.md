@@ -25,7 +25,7 @@ Para cada código que se agregue o cambie de forma relevante, esta documentació
 
 ## Estado actual
 
-El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante backend propio, sesiones cifradas en Supabase y un endpoint protegido de perfil. Aún no se han implementado las pantallas funcionales ni los demás endpoints académicos.
+El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante backend propio, sesiones cifradas en Supabase y endpoints protegidos de perfil y Kardex con DTO propios. Aún faltan las pantallas funcionales y los endpoints de calificaciones y horario.
 
 ### Implementado
 
@@ -37,15 +37,17 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 - Base para sesiones mediante cookie `httpOnly`.
 - Validación de variables de entorno del backend.
 - Cliente de Supabase exclusivo de backend.
-- Tabla `public.app_sessions` disponible en Supabase para persistir sesiones futuras.
+- Tabla `public.app_sessions` utilizada en Supabase para persistir sesiones.
 - Login real SII ITC, cookie `httpOnly`, revocación y middleware reutilizable de sesión.
 - Endpoint protegido `GET /student/profile` conectado a SII ITC.
+- Endpoint protegido `GET /student/kardex`, con consulta institucional real y normalización a `StudentKardex`.
 - Compilación y validación de tipos exitosas.
 
 ### Pendiente
 
 - Rutas y componentes de interfaz.
-- Integración y prueba real de calificaciones, kardex y horario con SII ITC.
+- Integración y prueba real de calificaciones y horario con SII ITC.
+- Comprobación manual final de la respuesta normalizada de Kardex en Postman y de su acceso sin cookie.
 - Dashboard y pantallas frontend.
 - Seleccionar y justificar la funcionalidad adicional de impacto; el planificador es solo una propuesta por ahora.
 - Pruebas, despliegue en Render y documentación visual.
@@ -134,7 +136,7 @@ El frontend es una SPA. Por ahora contiene la plantilla inicial de Vite; aún no
 
 ### Responsabilidad
 
-El frontend presentará el login, dashboard, calificaciones, kardex, horario y planificador. Solo consumirá endpoints del backend propio. Cuando se implementen llamadas autenticadas, deberán incluir credenciales para que el navegador envíe la cookie de sesión:
+El frontend presentará el login, dashboard, calificaciones, kardex, horario y la funcionalidad adicional que el equipo elija. Solo consumirá endpoints del backend propio. Cuando se implementen llamadas autenticadas, deberán incluir credenciales para que el navegador envíe la cookie de sesión:
 
 ```ts
 fetch('http://localhost:3000/endpoint', {
@@ -206,7 +208,7 @@ Este módulo define las opciones que `auth.controller.ts` aplica al emitir la co
 
 **Conexiones:** usa `session.repository.ts` para recuperar y tocar la sesión, `session-cookie.ts` para borrar la cookie con los mismos atributos y `env.ts` para conocer el nombre de cookie. Los controladores posteriores obtienen la sesión validada mediante `getAuthenticatedSession`.
 
-**Pendiente y consumidor futuro:** actualmente protege `GET /auth/session`. Emilio lo reutilizará para perfil y kardex; Rebo se beneficiará indirectamente cuando el frontend use endpoints protegidos de calificaciones, horario y planificador.
+**Pendiente y consumidor futuro:** actualmente protege `GET /auth/session`, `GET /student/profile` y `GET /student/kardex`. Se reutilizará en calificaciones, horario y las rutas privadas de la funcionalidad adicional seleccionada.
 
 ### `backend/src/modules/auth/token-crypto.ts`
 
@@ -260,6 +262,8 @@ El formato real confirmado del login institucional contiene el JWT en `message.l
 El cliente no registra ni reenvía credenciales, tokens ni respuestas institucionales al navegador.
 
 La función `getStudentProfile` recibe el JWT SII exclusivamente desde una sesión interna y lo adjunta al header `Authorization: Bearer <token>` para consultar `GET /api/movil/estudiante`. Si SII responde `401` o `403`, genera `invalid_session`; el controlador revoca entonces la sesión local y borra su cookie.
+
+La función `getStudentKardex(siiToken): Promise<unknown>` aplica el mismo patrón a `GET /api/movil/estudiante/kardex`. Resuelve la consulta real del historial sin que el frontend conozca el JWT. Recibe el token de la sesión validada y devuelve el JSON institucional exclusivamente al controlador; este lo valida con el DTO. Red o timeout y HTTP no exitosos generan `unavailable`, `401/403` generan `invalid_session` y un JSON ilegible o `null` genera `invalid_response`. Falta reutilizar este patrón para calificaciones y horarios; Emilio lo integra y el frontend consumirá únicamente la API propia.
 
 ### `backend/src/modules/auth/authentication.service.ts`
 
@@ -323,21 +327,23 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 
 **Por qué existe:** separa el dominio académico del dominio de autenticación y permitirá añadir perfil, kardex, calificaciones y horario sin alterar `app.ts` ni repetir la protección de sesión.
 
-**Entradas y salidas:** registra `GET /profile`; montado bajo `/student`, expone `GET /student/profile`. Requiere la cookie de sesión y delega al controlador solo después de `requireAuthenticatedSession`.
+**Entradas y salidas:** registra `GET /profile` y `GET /kardex` por separado; montado bajo `/student`, expone `GET /student/profile` y `GET /student/kardex`. Cada ruta requiere la cookie de sesión y delega al controlador solo después de `requireAuthenticatedSession`. Registrar `getKardex` como otro callback de `/profile` no crea una nueva ruta y ocasiona `404` en `/student/kardex`.
 
-**Conexiones:** importa el middleware de autenticación y `getProfile` desde `student.controller.ts`; `app.ts` lo monta bajo `/student`.
+**Conexiones:** importa el middleware de autenticación y los controladores `getProfile` y `getKardex` desde `student.controller.ts`; `app.ts` lo monta bajo `/student`.
 
-**Pendiente y consumidor futuro:** Emilio añadirá kardex en este router. Rebo consumirá perfil, calificaciones y horario desde el frontend cuando estén disponibles.
+**Pendiente y consumidor futuro:** faltan calificaciones y horario. Emilio usará perfil y Kardex en sus pantallas; Rebo coordinará sus consumidores de API con estos contratos.
 
 ### `backend/src/modules/student/student.controller.ts`
 
-**Problema que resuelve:** presenta el perfil institucional mediante un endpoint propio, sin que React necesite conocer ni usar el JWT de SII.
+**Problema que resuelve:** presenta el perfil y Kardex institucionales mediante endpoints propios, sin que React necesite conocer ni usar el JWT de SII.
 
 **Por qué existe:** convierte la sesión interna validada en una consulta autorizada a SII y centraliza el manejo seguro de respuesta, sesión institucional vencida e indisponibilidad del servicio.
 
 **Entradas y salidas:** recibe una petición ya autorizada por middleware. Obtiene la respuesta cruda de SII y la transforma con `parseStudentProfile`. Devuelve `200 { profile: StudentProfile }`; puede devolver `401` si el JWT SII expiró, `502` si SII envía JSON inválido o si el DTO detecta una estructura de perfil incompatible, `503` cuando SII no está disponible o `500` ante error interno. No devuelve el JWT.
 
 **Conexiones:** obtiene `siiToken` desde `getAuthenticatedSession`, consulta `getStudentProfile` en `sii.client.ts`, normaliza los datos con `student-profile.dto.ts` y, en caso de token inválido, usa `revokeSession` y `clearSessionCookieOptions`.
+
+`getKardex(request, response): Promise<void>` recibe una petición autorizada por middleware, obtiene `session.siiToken`, consulta `getStudentKardex` y normaliza con `parseStudentKardex`. Devuelve `200 { kardex: StudentKardex }`. Un `ZodError` o JSON inválido produce `502`; una sesión institucional rechazada limpia la cookie, intenta revocar la sesión local y produce `401` (o `500` si falla esa revocación); indisponibilidad SII produce `503` y otros errores, `500`. Envía cada respuesta y termina con `return;` cuando corresponde para respetar `Promise<void>`. No persiste el historial ni devuelve la respuesta cruda institucional.
 
 **Pendiente y consumidor futuro:** Emilio usará este contrato para el endpoint y las métricas del dashboard. Rebo podrá consumir sus nombres estables desde React; faltan la interfaz de perfil y los demás recursos académicos.
 
@@ -352,6 +358,22 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 **Conexiones:** lo invoca `student.controller.ts` inmediatamente después de `getStudentProfile`; no llama a la base de datos, no conoce cookies ni expone el JWT de SII.
 
 **Pendiente y consumidor futuro:** Emilio reutilizará sus métricas en el dashboard. Rebo usará la respuesta normalizada mediante el cliente HTTP del frontend. El campo institucional `persona` queda fuera hasta conocer y acordar su estructura necesaria para la interfaz.
+
+### `backend/src/modules/student/student-kardex.dto.ts`
+
+**Problema que resuelve:** transforma el historial de SII a un contrato propio tipado, conservando calificaciones textuales como `AC` sin convertirlas a cero ni perder registros.
+
+**Por qué existe:** separa validación y traducción de datos de la consulta HTTP y del controlador. Evita acoplar la pantalla a `data.kardex` y los nombres institucionales.
+
+**Entradas y salidas:** `parseStudentKardex(rawKardex: unknown): StudentKardex` recibe el objeto institucional con `code: 200`, `flag: true` y `data`, sin la envoltura exterior de nuestra API. `siiKardexSchema` valida ese éxito y su lista; `requiredText` exige textos no vacíos. `nonNegativeNumber` convierte textos numéricos y exige números finitos no negativos; el semestre además debe ser entero. `gradeLabelSchema` conserva la calificación como texto y `toNumericGrade` devuelve su número finito o `null` si es textual. Una estructura incompatible lanza `ZodError`; una lista vacía es válida.
+
+`StudentKardex` devuelve `progressPercentage` y `subjects: KardexSubject[]`. Cada registro contiene `name`, `code`, `period`, `credits`, `grade`, `gradeLabel`, `evaluationDescription` y `semester`. El avance procede de SII sin recalcularse. `.map()` conserva orden y cantidad, incluidos intentos repetidos. `period` conserva valores como `26/V` sin atribuirles un significado no confirmado; `gradeLabel: 'AC'` produce `grade: null`, nunca cero. Las cadenas vacías de créditos se rechazan.
+
+**Conexiones:** `getKardex` lo invoca después de `getStudentKardex`; no accede a cookies, JWT ni Supabase. El JSON propio es `{ kardex: { progressPercentage, subjects } }`, sin `kardex.data` ni la envoltura `code/message/flag` institucional.
+
+**Pendiente y consumidor futuro:** Emilio usará este contrato para la pantalla estructurada del historial. El frontend debe mostrar `gradeLabel` y distinguir notas numéricas de textuales al calcular o colorear; no se ha definido una equivalencia numérica para `AC`. Falta comprobar manualmente el endpoint normalizado y su acceso sin cookie.
+
+**Validación de este conjunto:** `npm run check` pasó. Se ejecutó el DTO real contra el JSON adjunto sin guardar datos personales en el repositorio: conservó los 50 registros, códigos, períodos y créditos, y convirtió `AC` a etiqueta con número `null`. También se verificó el rechazo de envoltura inválida, `flag: false` y créditos vacíos, y la aceptación de un historial vacío. Emilio confirmó previamente `200` de la consulta institucional en Postman; esa prueba fue anterior a la normalización.
 
 ### `backend/src/lib/supabase.ts`
 
@@ -497,4 +519,4 @@ feature/student-profile-endpoint
 
 ## Próximo cambio previsto
 
-El siguiente conjunto de cambios deberá normalizar el perfil a un DTO tipado para dashboard o implementar el endpoint de kardex. Antes de implementarlo se deberá documentar el contrato definitivo que consumirá React, sin incluir datos personales de prueba.
+Perfil y Kardex ya disponen de DTO. Antes de confirmar este conjunto, comprobar en Postman `GET /student/kardex` normalizado y su rechazo sin cookie. Después se acordará la siguiente tarea de Emilio: preparar el dashboard/Kardex frontend en coordinación con Rebo o entregar los endpoints de calificaciones y horario. La funcionalidad adicional sigue pendiente de elección.

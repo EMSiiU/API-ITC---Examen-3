@@ -116,3 +116,56 @@ export async function getStudentProfile(
 
     return profile;
 }
+
+// Funcion que recibe token y obtiene el kardex del alumno
+export async function getStudentKardex(
+    siiToken: string,
+): Promise<unknown> {
+    let response: Response;
+
+    try {
+        response = await fetch(
+            siiUrl('/api/movil/estudiante/kardex'),
+            {
+                method: 'GET',
+                headers: {
+                    Accept: 'application/json',
+                    Authorization: `Bearer ${siiToken}`,
+                },
+                signal: AbortSignal.timeout(
+                    env.SII_REQUEST_TIMEOUT_MS,
+                ),
+            },
+        );
+    } catch {
+        throw new SiiApiError(
+            'unavailable',
+            'The institutional service is unavailable.',
+        );
+    }
+
+    if (response.status === 401 || response.status === 403) {
+        throw new SiiApiError(
+            'invalid_session',
+            'The institutional session is no longer valid.',
+        );
+    }
+
+    if (!response.ok) {
+        throw new SiiApiError(
+            'unavailable',
+            'The institutional service could not process the request.',
+        );
+    }
+
+    const kardex: unknown = await response.json().catch(() => null);
+
+    if (kardex === null) {
+        throw new SiiApiError(
+            'invalid_response',
+            'The institutional service returned an invalid response.',
+        );
+    }
+
+    return kardex;
+}

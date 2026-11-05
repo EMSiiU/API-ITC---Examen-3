@@ -116,6 +116,7 @@ Para producción, la cookie debe usar `Secure=true`. Si frontend y backend se ma
 - `GET /auth/session`, `POST /auth/logout` y middleware reutilizable de sesión.
 - `GET /student/profile`, protegido por sesión y conectado al endpoint real de perfil SII.
 - DTO `StudentProfile` que valida y normaliza la respuesta institucional mediante Zod antes de entregarla al frontend.
+- `GET /student/kardex` protegido, conectado a SII y normalizado por `student-kardex.dto.ts`. La consulta real devolvió `200` en Postman antes de normalizar; el DTO pasó las pruebas con la respuesta completa adjunta. Falta confirmar manualmente la respuesta final del endpoint y su rechazo sin cookie.
 - CORS restringido a `FRONTEND_ORIGIN`, con credenciales habilitadas.
 
 Detalles de integración confirmados que Rebo no debe sustituir ni exponer:
@@ -137,7 +138,9 @@ El DTO convierte números recibidos como texto a `number`; el frontend debe dist
 
 Validaciones realizadas: compilación backend y prueba aislada del DTO con datos válidos e inválidos; flujo manual con SII real (`health=200`, `login=200`, `profile=200`, `logout=204`); `npm run check` pasó en la revisión posterior. El frontend sigue siendo la plantilla de Vite, por lo que todavía no hay login visual ni dashboard integrado. No se deben incorporar datos personales de esas pruebas a documentos ni fixtures.
 
-Siguiente tarea de Emilio: integrar `GET /api/movil/estudiante/kardex` desde el cliente SII, confirmar el JSON real y definir el contrato protegido propio `GET /student/kardex`. La ruta institucional está confirmada; el endpoint propio aún no está implementado.
+Contrato de Kardex disponible: `200 { kardex: { progressPercentage: number, subjects: KardexSubject[] } }`. Cada registro contiene `name`, `code`, `period`, `credits`, `grade`, `gradeLabel`, `evaluationDescription` y `semester`. `credits`, `semester` y las notas numéricas se convierten a números; `grade` es `number | null`, mientras que `gradeLabel` siempre es texto para mostrarlo. Se encontró `AC` en la respuesta real: se conserva como etiqueta con `grade: null`, sin asignarle un valor numérico. Los períodos como `26/V` se conservan como texto. La lista mantiene todos los intentos y el orden de SII; ya no se debe buscar `kardex.data.kardex` desde React.
+
+Siguiente paso inmediato de Emilio: comprobar el endpoint normalizado en Postman antes del commit. Después coordinar el dashboard y Kardex frontend y las integraciones pendientes de calificaciones y horario. No comenzar automáticamente la siguiente fase.
 
 Rebo debe partir de `main` actualizado y verificar que los Pull Requests de Emilio estén fusionados antes de conectar el frontend. No debe editar módulos backend de Emilio sin coordinación.
 
@@ -199,7 +202,7 @@ Direcciones locales esperadas:
 
 ## Contratos de API actuales y previstos
 
-Los endpoints de autenticación y perfil están implementados; calificaciones, kardex, horario y funcionalidad adicional siguen pendientes. Rebo debe coordinar cualquier cambio de contrato con Emilio.
+Los endpoints de autenticación, perfil y Kardex están implementados; calificaciones, horario y funcionalidad adicional siguen pendientes. Rebo debe coordinar cualquier cambio de contrato con Emilio.
 
 | Método y ruta | Solicitud | Respuesta esperada | Responsable |
 |---|---|---|---|
@@ -208,7 +211,7 @@ Los endpoints de autenticación y perfil están implementados; calificaciones, k
 | `POST /auth/logout` | Cookie de sesión | Revoca sesión, elimina cookie y devuelve `204` | Emilio |
 | `GET /student/profile` | Cookie de sesión | `200 { profile: StudentProfile }` normalizado | Emilio |
 | `GET /student/grades` (pendiente) | Cookie de sesión | Calificaciones desde SII; DTO por confirmar | Emilio |
-| `GET /student/kardex` (pendiente) | Cookie de sesión | Kardex desde SII; DTO por confirmar | Emilio |
+| `GET /student/kardex` | Cookie de sesión | `200 { kardex: StudentKardex }` normalizado; confirmación HTTP final pendiente | Emilio |
 | `GET /student/schedule` (pendiente) | Cookie de sesión | Horario desde SII; DTO por confirmar | Emilio |
 | Rutas de funcionalidad adicional | Por definir | Por definir tras seleccionar propuesta | Ambos |
 
