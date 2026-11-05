@@ -335,11 +335,23 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 
 **Por qué existe:** convierte la sesión interna validada en una consulta autorizada a SII y centraliza el manejo seguro de respuesta, sesión institucional vencida e indisponibilidad del servicio.
 
-**Entradas y salidas:** recibe una petición ya autorizada por middleware. Devuelve `200 { profile: ... }` con la respuesta institucional; puede devolver `401` si el JWT SII expiró, `502` ante JSON institucional inválido, `503` cuando SII no está disponible o `500` ante error interno. No devuelve el JWT.
+**Entradas y salidas:** recibe una petición ya autorizada por middleware. Obtiene la respuesta cruda de SII y la transforma con `parseStudentProfile`. Devuelve `200 { profile: StudentProfile }`; puede devolver `401` si el JWT SII expiró, `502` si SII envía JSON inválido o si el DTO detecta una estructura de perfil incompatible, `503` cuando SII no está disponible o `500` ante error interno. No devuelve el JWT.
 
-**Conexiones:** obtiene `siiToken` desde `getAuthenticatedSession`, consulta `getStudentProfile` en `sii.client.ts`, y en caso de token inválido usa `revokeSession` y `clearSessionCookieOptions`.
+**Conexiones:** obtiene `siiToken` desde `getAuthenticatedSession`, consulta `getStudentProfile` en `sii.client.ts`, normaliza los datos con `student-profile.dto.ts` y, en caso de token inválido, usa `revokeSession` y `clearSessionCookieOptions`.
 
-**Pendiente y consumidor futuro:** la respuesta actual mantiene el formato oficial dentro de `profile`. El siguiente paso definirá un DTO tipado y estable para que el dashboard de Emilio y el frontend de Rebo no dependan de nombres crudos del SII.
+**Pendiente y consumidor futuro:** Emilio usará este contrato para el endpoint y las métricas del dashboard. Rebo podrá consumir sus nombres estables desde React; faltan la interfaz de perfil y los demás recursos académicos.
+
+### `backend/src/modules/student/student-profile.dto.ts`
+
+**Problema que resuelve:** evita que el frontend dependa de la estructura cruda de SII, que puede usar nombres institucionales poco claros o inconsistentes, como `percentaje_avance_cursando`.
+
+**Por qué existe:** valida la forma mínima del perfil recibido desde SII y lo adapta a un contrato interno `StudentProfile` con nombres consistentes y agrupaciones útiles para el dashboard.
+
+**Entradas y salidas:** `parseStudentProfile(rawProfile)` recibe `unknown`, valida `rawProfile.data` con Zod y devuelve `StudentProfile`. Convierte números enviados como texto a `number` y representa datos ausentes como `null`. Si la estructura no cumple el contrato, lanza `ZodError`, que el controlador traduce a `502`.
+
+**Conexiones:** lo invoca `student.controller.ts` inmediatamente después de `getStudentProfile`; no llama a la base de datos, no conoce cookies ni expone el JWT de SII.
+
+**Pendiente y consumidor futuro:** Emilio reutilizará sus métricas en el dashboard. Rebo usará la respuesta normalizada mediante el cliente HTTP del frontend. El campo institucional `persona` queda fuera hasta conocer y acordar su estructura necesaria para la interfaz.
 
 ### `backend/src/lib/supabase.ts`
 
