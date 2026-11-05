@@ -34,7 +34,7 @@ El proyecto ya cuenta con la estructura inicial del monorepo, la base de segurid
 
 - Rutas y componentes de interfaz.
 - Autenticación real mediante el backend y SII ITC.
-- Repositorio y operaciones de persistencia de sesiones en Supabase PostgreSQL.
+- Repositorio interno de sesiones en Supabase PostgreSQL, con cifrado del token institucional.
 - Consulta de perfil, calificaciones, kardex y horario.
 - Planificador Inteligente de Trayectoria Académica.
 - Pruebas, despliegue en Render y documentación visual.
@@ -65,10 +65,10 @@ El frontend nunca se comunica directamente con la API institucional SII ITC. Tod
 2. El backend consulta el login de SII ITC.
 3. El backend guarda el JWT institucional únicamente del lado servidor, asociado a una sesión propia.
 4. El backend devolverá una cookie con un identificador de sesión aleatorio. La cookie no contendrá el JWT institucional.
-5. En peticiones posteriores, el navegador envía la cookie al backend y este recupera la sesión antes de consultar SII ITC.
+5. En peticiones posteriores, el navegador enviará la cookie al backend y este recuperará la sesión antes de consultar SII ITC.
 6. Al cerrar sesión, el backend invalida la sesión y elimina la cookie.
 
-La tabla de sesiones y el cliente de Supabase ya están preparados. Todavía falta implementar el repositorio que cree, consulte, renueve, revoque y elimine sesiones. Dicho repositorio deberá cifrar el JWT institucional antes de guardarlo.
+La tabla de sesiones, el cliente de Supabase y el repositorio interno ya están preparados. El repositorio cifra el JWT institucional antes de guardarlo. Todavía falta integrar este repositorio con el cliente SII, los controladores HTTP y la cookie emitida al navegador.
 
 ### Tabla `public.app_sessions`
 
@@ -180,6 +180,30 @@ Centraliza las opciones que se aplicarán al crear la cookie de sesión:
 
 Este módulo todavía no emite cookies porque aún no existe el login real ni el repositorio de sesiones.
 
+### `backend/src/modules/auth/token-crypto.ts`
+
+Protege el JWT institucional antes de guardarlo en Supabase mediante AES-256-GCM:
+
+- Usa una llave de 32 bytes decodificada desde `SII_TOKEN_ENCRYPTION_KEY`.
+- Genera un IV aleatorio de 12 bytes para cada cifrado.
+- Genera y valida un tag de autenticación de 16 bytes.
+- Usa el identificador de sesión como AAD (Additional Authenticated Data), por lo que un token cifrado no puede reasociarse con otra sesión.
+- Almacena el resultado como `v1.iv.authTag.ciphertext`, usando Base64URL.
+- Al descifrar, los datos modificados o asociados a otra sesión producen un error y deben descartarse.
+
+El módulo no registra ni expone el token original ni el valor cifrado.
+
+### `backend/src/modules/auth/session.repository.ts`
+
+Centraliza el acceso interno a `public.app_sessions`. Sus funciones no son endpoints HTTP y su tipo `ActiveSession`, que incluye `siiToken`, no debe enviarse nunca como respuesta al frontend.
+
+| Función | Responsabilidad |
+|---|---|
+| `createSession` | Cifra el JWT SII y crea una fila de sesión con expiración. |
+| `findActiveSession` | Recupera solo sesiones no revocadas y no vencidas; descifra el token únicamente dentro del backend. |
+| `touchSession` | Actualiza la hora de última actividad de una sesión activa. |
+| `revokeSession` | Marca una sesión como revocada para logout o invalidación. |
+
 ### `backend/src/lib/supabase.ts`
 
 Crea un cliente de Supabase para uso exclusivo del backend. Se inicializa con `SUPABASE_URL` y `SUPABASE_SECRET_KEY`; la renovación y persistencia de sesión de Supabase Auth están deshabilitadas porque las sesiones de esta aplicación son propias y se relacionarán con SII ITC, no con Supabase Auth.
@@ -270,12 +294,20 @@ feature/auth-backend-sii-sessions
 - Se validaron localmente el tipado, la compilación y el arranque del backend.
 - Se verificaron mediante consultas de solo lectura la conectividad con Supabase y las columnas esperadas de `app_sessions`, sin leer filas ni imprimir secretos.
 
+### Repositorio de sesiones cifradas
+
+- Se creó `token-crypto.ts`, que cifra y descifra el JWT de SII con AES-256-GCM.
+- Se usa un IV aleatorio por operación y un tag de autenticación para proteger confidencialidad e integridad.
+- El identificador de sesión se usa como AAD, evitando la reasociación de contenido cifrado entre sesiones.
+- Se creó `session.repository.ts` con operaciones para crear, buscar, registrar actividad y revocar sesiones.
+- Se validaron el tipado y la compilación del proyecto.
+- Se ejecutó una prueba local con un token ficticio: el valor cifrado no incluyó el texto original y se descifró correctamente usando la misma sesión.
+
 ## Próximo cambio previsto
 
-El siguiente conjunto de cambios deberá implementar el repositorio de sesiones sobre la infraestructura de Supabase ya creada. Antes de implementarlo se deberá documentar:
+El siguiente conjunto de cambios deberá implementar el cliente interno de SII ITC y el servicio de autenticación. Antes de implementarlo se deberá documentar:
 
-- Cifrado AES-256-GCM del JWT de SII antes de persistirlo.
-- Forma de asociar una sesión al token institucional sin exponerlo.
-- Caducidad e invalidación.
-- Variables de entorno nuevas.
+- URL base y contrato del API SII, sin incluir credenciales.
+- Manejo de errores institucionales, de red y de credenciales inválidas.
 - Contrato de `POST /auth/login`, `GET /auth/session` y `POST /auth/logout`.
+- Emisión y borrado de la cookie `httpOnly` mediante los controladores HTTP.
