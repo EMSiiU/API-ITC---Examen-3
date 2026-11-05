@@ -7,6 +7,7 @@ import {
 import {
     getProfile,
     getKardex,
+    getGrades,
 } from './student.controller.js';
 
 export const studentRouter = Router();
@@ -21,4 +22,10 @@ studentRouter.get(
     '/kardex',
     requireAuthenticatedSession,
     getKardex,
+);
+
+studentRouter.get(
+    '/grades',
+    requireAuthenticatedSession,
+    getGrades,
 );

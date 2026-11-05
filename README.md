@@ -19,6 +19,7 @@ El navegador solo consulta nuestro backend. Las credenciales se envían al backe
 - Sesiones persistidas, consulta de sesión, cierre de sesión y middleware de protección.
 - Perfil académico protegido, validado con Zod y normalizado a un DTO propio para el dashboard.
 - Kardex protegido conectado a SII y normalizado a un DTO que conserva períodos e intentos, incluidas notas textuales como `AC`.
+- Calificaciones protegidas, conectadas a SII y normalizadas por período, materia y evaluación, conservando notas pendientes como `null`.
 - CORS con origen explícito y credenciales habilitadas.
 - Frontend todavía con la plantilla inicial de Vite; las pantallas e integración visual siguen pendientes.
 
@@ -34,6 +35,7 @@ El flujo local de salud, login, perfil normalizado y logout se probó con SII re
 | `POST /auth/logout` | Revoca la sesión local y elimina la cookie; devuelve `204` |
 | `GET /student/profile` | Requiere cookie válida; devuelve `{ profile: StudentProfile }` |
 | `GET /student/kardex` | Requiere cookie válida; devuelve `{ kardex: StudentKardex }` |
+| `GET /student/grades` | Requiere cookie válida; devuelve `{ grades: StudentGrades }` |
 
 `StudentProfile` contiene `controlNumber`, `email`, `semester`, `photoUrl`, `academicProgress`, `averages` y `subjects`. Los campos ausentes se representan con `null`; el frontend no debe buscar `profile.data` ni recibir el JWT institucional.
 
@@ -47,7 +49,7 @@ El backend es el único consumidor de estas rutas. El host configurado es `https
 |---|---|
 | `POST /api/login` | Implementado y probado |
 | `GET /api/movil/estudiante` | Implementado y probado |
-| `GET /api/movil/estudiante/calificaciones` | Pendiente |
+| `GET /api/movil/estudiante/calificaciones` | Integrado y respuesta normalizada comprobada; nota final oficial por confirmar |
 | `GET /api/movil/estudiante/kardex` | Integrado; DTO validado, comprobación HTTP final pendiente |
 | `GET /api/movil/estudiante/horarios` | Pendiente |
 
@@ -109,7 +111,7 @@ Se prevén dos servicios independientes en Render: un Static Site para `frontend
 
 - Login visual, redirección al dashboard y protección de rutas frontend.
 - Dashboard personalizado con indicadores, carga y errores; confirmar la estructura de `persona` para incorporar el nombre si corresponde.
-- Calificaciones con materia, período y nota final, búsqueda/filtro y colores de desempeño.
+- Pantalla de calificaciones con búsqueda/filtro y colores de desempeño; confirmar la fuente de la nota final oficial, que no está identificada en las evaluaciones numeradas recibidas.
 - Kardex completo estructurado y horario por día y hora en secciones independientes.
 - Elegir y justificar una funcionalidad adicional de impacto, con administración en el backend propio y persistencia según su diseño.
 - Pruebas de integración, interfaz y producción; publicación en Render.
