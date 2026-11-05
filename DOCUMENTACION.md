@@ -13,6 +13,16 @@ Cada conjunto de cambios que vaya a confirmarse en un commit debe actualizar est
 
 No deben documentarse como terminadas funciones que solamente estén propuestas o en desarrollo.
 
+### Ficha obligatoria por módulo o archivo nuevo
+
+Para cada código que se agregue o cambie de forma relevante, esta documentación debe incluir una ficha con estos cinco puntos:
+
+1. **Problema que resuelve:** necesidad técnica o de usuario que atiende.
+2. **Por qué existe:** razón de separar ese archivo, función o módulo.
+3. **Entradas y salidas:** datos que recibe, devuelve, persiste o rechaza.
+4. **Conexiones:** módulos anteriores y posteriores con los que interactúa.
+5. **Pendiente y consumidor futuro:** qué falta para completar el flujo y qué componente o integrante lo usará después.
+
 ## Estado actual
 
 El proyecto ya cuenta con la estructura inicial del monorepo, la base de seguridad para la autenticación y la conexión de servidor a Supabase. Aún no se conecta a la API del SII ITC, no persiste sesiones desde endpoints y no se han implementado las pantallas funcionales.
@@ -240,6 +250,50 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 
 No existe todavía un controlador HTTP que invoque este servicio; por lo tanto, ninguna cookie se emite todavía y el frontend no puede autenticarse aún.
 
+### `backend/src/modules/auth/auth.routes.ts`
+
+**Problema que resuelve:** organiza los endpoints de autenticación en un único punto en vez de mezclar rutas de login, sesión y logout con la configuración general de Express.
+
+**Por qué existe:** un `Router` de Express permite agrupar funcionalidades relacionadas y montarlas con un prefijo. Esto facilita agregar middleware específico de autenticación en el futuro sin afectar rutas académicas u otros módulos.
+
+**Entradas y salidas:** no procesa datos por sí mismo; enruta `POST /login`, `GET /session` y `POST /logout` a sus controladores. Al montarse con el prefijo `/auth`, las rutas públicas finales son `POST /auth/login`, `GET /auth/session` y `POST /auth/logout`.
+
+**Conexiones:** importa los controladores de `auth.controller.ts` y es montado desde `app.ts` mediante `app.use('/auth', authRouter)`.
+
+**Pendiente y consumidor futuro:** Rebo consumirá estas rutas desde la interfaz de login usando `credentials: 'include'`. Más adelante, las rutas académicas reutilizarán la verificación de sesión antes de consultar SII ITC.
+
+### `backend/src/modules/auth/auth.controller.ts`
+
+**Problema que resuelve:** transforma peticiones HTTP no confiables del frontend en llamadas seguras a la lógica interna de autenticación, sin filtrar tokens institucionales, errores crudos de SII ni detalles de Supabase.
+
+**Por qué existe:** separa responsabilidades HTTP (validación de cuerpo, códigos de estado, cookies y respuestas JSON) de las responsabilidades de negocio que pertenecen a `authentication.service.ts` y de persistencia que pertenecen a `session.repository.ts`.
+
+**Entradas y salidas:**
+
+| Función | Entrada | Salida HTTP | Persistencia/efecto |
+|---|---|---|---|
+| `login` | JSON `{ email, password }` | `200 { authenticated: true }`; `400`, `401`, `502`, `503` o `500` en error | Pide autenticación al servicio; en éxito establece la cookie con el ID de sesión. |
+| `getSession` | Cookie `pta_session` u otro nombre configurado | `200 { authenticated: true }` o `401` | Consulta la sesión activa y actualiza `last_seen_at`; no devuelve JWT SII. |
+| `logout` | Cookie de sesión opcional | `204` o `500` | Revoca la sesión existente y elimina la cookie en el navegador. |
+| `clearSessionCookie` | Objeto `Response` | No devuelve cuerpo | Expira la cookie usando los mismos atributos de seguridad. |
+| `sendSiiError` | Error interno `SiiApiError` | `401`, `502` o `503` con mensaje seguro | Oculta detalles de red y respuesta de SII ITC. |
+
+**Conexiones:** `login` invoca `authenticateWithSii`, el cual usa `sii.client.ts` y `session.repository.ts`. `getSession` y `logout` usan el repositorio de sesiones. Las opciones de cookie provienen de `session-cookie.ts`; el nombre viene de `env.ts`.
+
+**Pendiente y consumidor futuro:** el frontend de Rebo utilizará estos endpoints desde su servicio de API. Aún falta conectar el formulario React, probar login institucional real de manera autorizada y crear un middleware reutilizable que proteja rutas académicas.
+
+### Montaje en `backend/src/app.ts`
+
+**Problema que resuelve:** evita respuestas `404` al hacer que Express conozca el router de autenticación.
+
+**Por qué existe:** importar un router no basta; `app.use('/auth', authRouter)` lo incorpora al ciclo de solicitudes de Express. También se mantiene una sola ejecución de `cookieParser()`, suficiente para leer la cookie en todos los controladores.
+
+**Entradas y salidas:** recibe todas las solicitudes cuyo path inicia con `/auth` y las delega al router. No produce respuestas propias para esas rutas; cada controlador decide su respuesta.
+
+**Conexiones:** se ejecuta después de CORS, JSON y `cookieParser`, por lo que el router recibe cuerpos JSON y cookies ya procesados. Conecta `app.ts` con `auth.routes.ts`.
+
+**Pendiente y consumidor futuro:** será la base de todos los clientes frontend y de las pruebas manuales de API. Las rutas de estudiante se montarán posteriormente de forma similar, posiblemente bajo `/student`.
+
 ### `backend/src/lib/supabase.ts`
 
 Crea un cliente de Supabase para uso exclusivo del backend. Se inicializa con `SUPABASE_URL` y `SUPABASE_SECRET_KEY`; la renovación y persistencia de sesión de Supabase Auth están deshabilitadas porque las sesiones de esta aplicación son propias y se relacionarán con SII ITC, no con Supabase Auth.
@@ -347,6 +401,14 @@ feature/auth-backend-sii-sessions
 - Se creó `sii.client.ts` con login interno, timeout y validación del token recibido.
 - Se creó `authentication.service.ts`, que une el login institucional con la creación de una sesión local cifrada.
 - Se validaron el tipado y la compilación del proyecto sin enviar solicitudes a SII ITC ni usar credenciales institucionales.
+
+### Rutas HTTP de autenticación
+
+- Se creó `auth.routes.ts` para agrupar `POST /auth/login`, `GET /auth/session` y `POST /auth/logout`.
+- Se creó `auth.controller.ts` para validar peticiones, emitir/borrar cookies y convertir errores internos en respuestas HTTP seguras.
+- Se montó `authRouter` en `app.ts` con `app.use('/auth', authRouter)`.
+- Se eliminó la ejecución duplicada de `cookieParser()`.
+- Se comprobó que `GET /auth/session` pasó de responder `404` a ser manejado por la capa de autenticación; sin cookie válida debe responder `401`.
 
 ## Próximo cambio previsto
 
