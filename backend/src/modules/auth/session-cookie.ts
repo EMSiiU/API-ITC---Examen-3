@@ -9,3 +9,10 @@ export const sessionCookieOptions: CookieOptions = {
   maxAge: env.SESSION_TTL_HOURS * 60 * 60 * 1000,
   path: '/',
 };
+
+export const clearSessionCookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: env.cookieSecure,
+  sameSite: env.COOKIE_SAME_SITE,
+  path: '/',
+};
