@@ -20,6 +20,8 @@ El navegador solo consulta nuestro backend. Las credenciales se envían al backe
 - Perfil académico protegido, validado con Zod y normalizado a un DTO propio para el dashboard.
 - Kardex protegido conectado a SII y normalizado a un DTO que conserva períodos e intentos, incluidas notas textuales como `AC`.
 - Calificaciones protegidas, conectadas a SII y normalizadas por período, materia y evaluación, conservando notas pendientes como `null`.
+- Horario con consulta real y DTO por períodos, materias y sesiones de lunes a sábado; respuesta duplicada corregida y funcionamiento autenticado confirmado por Emilio.
+- Las cuatro rutas académicas responden `401` sin cookie, comprobado por HTTP local.
 - CORS con origen explícito y credenciales habilitadas.
 - Frontend todavía con la plantilla inicial de Vite; las pantallas e integración visual siguen pendientes.
 
@@ -36,6 +38,7 @@ El flujo local de salud, login, perfil normalizado y logout se probó con SII re
 | `GET /student/profile` | Requiere cookie válida; devuelve `{ profile: StudentProfile }` |
 | `GET /student/kardex` | Requiere cookie válida; devuelve `{ kardex: StudentKardex }` |
 | `GET /student/grades` | Requiere cookie válida; devuelve `{ grades: StudentGrades }` |
+| `GET /student/schedule` | Requiere cookie válida; devuelve `{ schedule: StudentSchedule }` |
 
 `StudentProfile` contiene `controlNumber`, `email`, `semester`, `photoUrl`, `academicProgress`, `averages` y `subjects`. Los campos ausentes se representan con `null`; el frontend no debe buscar `profile.data` ni recibir el JWT institucional.
 
@@ -51,7 +54,7 @@ El backend es el único consumidor de estas rutas. El host configurado es `https
 | `GET /api/movil/estudiante` | Implementado y probado |
 | `GET /api/movil/estudiante/calificaciones` | Integrado y respuesta normalizada comprobada; nota final oficial por confirmar |
 | `GET /api/movil/estudiante/kardex` | Integrado; DTO validado, comprobación HTTP final pendiente |
-| `GET /api/movil/estudiante/horarios` | Pendiente |
+| `GET /api/movil/estudiante/horarios` | Integrado, DTO probado y funcionamiento autenticado confirmado por Emilio |
 
 Las consultas protegidas usan `Authorization: Bearer <token>` exclusivamente desde el backend. La autenticación y los datos académicos obligatorios deben proceder de SII real.
 
