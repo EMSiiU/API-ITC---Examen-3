@@ -6,8 +6,10 @@ Este archivo permite que Rebo entregue a un agente de IA el contexto suficiente 
 
 | Integrante | Identificador en este documento | Responsabilidades |
 |---|---|---|
-| Emilio | `Emilio` | Fundamentos, integración backend SII y sesiones, dashboard y kardex, seguridad/pruebas API/despliegue, arquitectura/backend en exposición y colaboración en la funcionalidad adicional que el equipo elija. |
-| Rebo | `Rebo` | Revisión de diseño/dependencias/requisitos, login y protección de rutas frontend, calificaciones y horario, interfaz/persistencia de la funcionalidad adicional que el equipo elija, pruebas UI/responsive/documentación y frontend en exposición. |
+| Emilio | `Emilio` | Backend principal: integración SII de autenticación, perfil, Kardex, calificaciones y horario; sesiones, cifrado, Supabase, contratos/DTO, seguridad y pruebas API; configuración del despliegue backend, documentación y exposición de su parte. Apoya y revisa técnicamente la funcionalidad adicional. |
+| Rebo | `Rebo` | Frontend completo: login, cliente HTTP, rutas privadas, navegación, dashboard, Kardex, calificaciones, horario, diseño responsive, estados y pruebas UI; despliegue frontend, documentación y exposición de su parte. Lidera la funcionalidad adicional: propuesta, interfaz, lógica y persistencia/backend propios necesarios, con apoyo de Emilio. |
+
+Este reparto sustituye el inicial por módulos mixtos: Emilio no tiene asignadas las pantallas React de dashboard ni Kardex. Ambos eligen y justifican la funcionalidad extra; Rebo asume su responsabilidad principal y coordina con Emilio cualquier cambio en backend, base de datos o contratos. La función todavía no está elegida, por lo que no se considera implementada. Ambos participan en integración y demostración final.
 
 ## Regla crítica para el agente de IA
 
@@ -66,7 +68,7 @@ Requisitos de interfaz que deben conservarse durante el desarrollo:
 
 - Login con validación, manejo de errores, redirección al dashboard y rutas privadas que regresen al login al perder la sesión.
 - Dashboard personalizado con indicadores visuales, carga y mensajes de error.
-- Calificaciones con nombre de materia, período y nota final; búsqueda o filtrado en tiempo real y colores de desempeño.
+- El PDF solicita materia, período y calificación final, búsqueda/filtro en tiempo real y colores de desempeño. La presentación acordada sigue el SII actual: parciales disponibles en Calificaciones del período en curso y resultados finales institucionales por materia/período en Kardex. No llamar “final” a una lista de parciales ni inventar una nota cuando todavía no existe.
 - Kardex con historial completo estructurado y horario organizado por día y hora, en secciones independientes con navegación fluida.
 - Funcionalidad adicional original con backend de administración y una propuesta que justifique sus beneficios. Puede formar parte de Express; no exige un servicio adicional independiente.
 - README con instalación, ejecución, descripción de la tecnología y capturas, publicación y demostración en vivo con participación de ambos integrantes. Las capturas y el README final se harán al terminar la práctica.
@@ -116,7 +118,7 @@ Para producción, la cookie debe usar `Secure=true`. Si frontend y backend se ma
 - `GET /auth/session`, `POST /auth/logout` y middleware reutilizable de sesión.
 - `GET /student/profile`, protegido por sesión y conectado al endpoint real de perfil SII.
 - DTO `StudentProfile` que valida y normaliza la respuesta institucional mediante Zod antes de entregarla al frontend.
-- `GET /student/grades` protegido, conectado a SII y normalizado mediante `StudentGrades`. Emilio compartió la respuesta autenticada normalizada; se comprobó que coincide con el DTO. HTTP sin cookie devuelve `401`; falta confirmar el origen de la nota final oficial.
+- `GET /student/grades` protegido, conectado a SII y normalizado mediante `StudentGrades`. Emilio compartió la respuesta autenticada normalizada; se comprobó que coincide con el DTO. HTTP sin cookie devuelve `401`. Sus evaluaciones se presentan como parciales, no como finales.
 - `GET /student/kardex` protegido, conectado a SII y normalizado por `student-kardex.dto.ts`. La consulta real devolvió `200` en Postman antes de normalizar; el DTO pasó las pruebas con la respuesta completa adjunta. HTTP sin cookie devuelve `401`; falta confirmación explícita de la respuesta autenticada normalizada final.
 - `GET /student/schedule` protegido, consulta institucional y DTO `StudentSchedule`. El doble envío del controlador fue corregido; Emilio confirmó que sigue funcionando y la prueba HTTP sin cookie devuelve `401`.
 - CORS restringido a `FRONTEND_ORIGIN`, con credenciales habilitadas.
@@ -144,15 +146,25 @@ Contrato de Kardex disponible: `200 { kardex: { progressPercentage: number, subj
 
 Contrato de calificaciones disponible: `200 { grades: { periods: [...] } }`. Cada período tiene `code`, `year`, `description` y `subjects`. Cada materia tiene `groupId`, `name`, `code`, `group` y `assessments`. Cada evaluación tiene `id`, `number`, `grade: number | null` y `gradeLabel: string | null`. La respuesta real revisada contiene un período, cuatro materias y 16 evaluaciones, ocho pendientes; esas cantidades son datos de prueba, no límites del contrato. Se conserva el orden institucional. `calificaiones` es el nombre original de SII y se traduce a `assessments`.
 
-Rebo debe mostrar “Pendiente” cuando `gradeLabel` sea `null`, conservar etiquetas textuales si aparecen y no colorear una nota ausente como cero. El JSON revisado no identifica una calificación final oficial; el equipo debe confirmar ese dato antes de dar por cumplido el requisito del PDF. No presentar una media de evaluaciones como nota oficial ni asumir que la última evaluación es la final.
+### Criterio académico y presentación acordada
+
+Según la explicación de Emilio y las capturas del SII, el semestre actual tiene cuatro parciales independientes: se requiere aprobar cada uno con 70 o más y la regularización corresponde a los parciales reprobados. El resultado final se registra al cerrar la materia y se consulta en Kardex. Esta explicación guía la presentación; el backend actual no calcula aprobación, regularización ni una nota final.
+
+- **Calificaciones / materias inscritas:** mostrar las notas por parcial tal como llegan en `assessments`, conservando sus números y notas disponibles. Se pueden mostrar uno, dos, tres o cuatro parciales capturados, o los cuatro espacios con “Pendiente” en los ausentes. Usar la lista recibida, sin fijar en el DTO un número universal de evaluaciones.
+- **Sin notas capturadas:** mostrar “Calificaciones aún no disponibles”. Para un parcial aislado con `gradeLabel: null`, mostrar “Pendiente” o `—`; nunca sustituirlo por cero. Un cero real enviado por SII sí debe conservarse y mostrarse.
+- **Kardex:** mostrar el resultado final institucional de cada registro de materia y período, respetando intentos y etiquetas como `AC`. No obtener una final promediando parciales incompletos ni interpretar el cuarto parcial como final.
+- Los colores de desempeño se aplican a notas numéricas disponibles; las ausentes tienen un estado neutral y las etiquetas textuales se conservan.
+- No se implementa un cruce automático entre `/grades` y `/kardex`: cada pantalla usa su fuente correspondiente. Si se solicita ese cruce después, deberá distinguir materia, período e intentos.
+
+La distinción entre parciales actuales y finales históricos queda acordada; deja de tratarse como un endpoint de final faltante. La pantalla y sus etiquetas deben hacer esa distinción explícita sin afirmar que ya existe una nota final del semestre en curso.
 
 Contrato de horario implementado: `200 { schedule: { periods: [...] } }`. Cada período tiene `code`, `year`, `description` y `subjects`. Cada materia tiene `groupId`, `group`, `name`, `code`, `shiftCode`, `programName`, `levelCode` y `sessions`. Cada sesión tiene `day` (1=lunes a 6=sábado), `startTime`, `endTime` en formato local `HH:mm` y `classroom: string | null`. Días sin horario no generan sesiones; una materia sin sesiones se conserva. Un bloque de dos horas cuenta como una sesión, sin dividirse ni convertirse a UTC. Rebo debe agrupar/ordenar para mostrar la agenda; no se ha implementado detección de traslapes.
 
 El DTO de horario pasó pruebas aisladas de días, horas y valores nulos. Emilio corrigió la respuesta duplicada de `getSchedule` y confirmó que sigue funcionando. La revisión constató un solo envío y `npm run check` pasó. También se verificó por HTTP `401` sin cookie en los cuatro endpoints académicos, sin usar credenciales institucionales.
 
-Siguiente tarea de Emilio tras cerrar el conjunto de horario: preparar el dashboard React con `/student/profile`, tipo frontend del DTO, indicadores de créditos/avance/promedios y estados de carga/error/datos ausentes. Coordinar previamente con Rebo su cliente HTTP, rutas privadas y navegación: reutilizar esa base y no implementar otro login. El frontend local revisado sigue siendo la plantilla Vite; Rebo puede tener avances en una rama separada que deberán revisarse antes de modificar la base compartida. Después seguirá Kardex frontend. No comenzar automáticamente la siguiente fase.
+Siguiente tarea de Emilio tras cerrar horario: consolidar el backend y entregar los contratos a Rebo; revisar expiración/revocación de sesión, errores institucionales y configuración de producción con pruebas proporcionales, sin asumir que esos casos ya están cubiertos. Rebo construye todo el frontend, incluidos dashboard y Kardex, reutilizando los contratos disponibles. El frontend local revisado sigue siendo la plantilla Vite; revisar cualquier avance de Rebo en otra rama antes de modificar archivos compartidos. Ambos deben elegir la función extra, que liderará Rebo con apoyo de Emilio. No comenzar automáticamente otra fase.
 
-Rebo debe partir de `main` actualizado y verificar que los Pull Requests de Emilio estén fusionados antes de conectar el frontend. No debe editar módulos backend de Emilio sin coordinación.
+Rebo debe partir de `main` actualizado y verificar que los Pull Requests de Emilio estén fusionados antes de conectar el frontend. Puede crear módulos backend propios de la función extra que lidere, coordinando su diseño; no debe alterar los módulos institucionales o de sesiones de Emilio sin coordinación.
 
 ## Estructura actual
 
@@ -175,7 +187,7 @@ Rebo debe partir de `main` actualizado y verificar que los Pull Requests de Emil
 │   │   └── modules/
 │   │       ├── auth/                 # Login, sesión, cookie y middleware
 │   │       ├── sii/                  # Cliente institucional exclusivo de backend
-│   │       └── student/              # Router, controlador y student-profile.dto.ts
+│   │       └── student/              # Router, controlador y DTO de perfil, Kardex, calificaciones y horario
 │   ├── .env.example
 │   ├── package.json
 │   └── tsconfig.json
@@ -196,6 +208,8 @@ Desde la raíz del repositorio:
 
 Antes de ejecutar el backend, configurar `backend/.env` a partir de `backend/.env.example`, sin compartir valores reales. Supabase debe tener la tabla `app_sessions`; consultar `DOCUMENTACION.md` para su estructura. `npm install` no crea esa tabla. Los dos comandos `dev:*` se ejecutan en terminales distintas.
 
+Cada integrante mantiene su `.env` fuera de Git. Si ambos usan el mismo proyecto y tabla `app_sessions`, deben usar la misma llave `SII_TOKEN_ENCRYPTION_KEY` para descifrar las sesiones compartidas; no regenerarla al configurar el equipo de Rebo. Compartir secretos mediante un canal privado seguro y usar credenciales institucionales individuales para probar. Las claves nunca pertenecen a React, variables `VITE_*`, documentos ni conversaciones con agentes.
+
 ```powershell
 npm install
 npm run dev:frontend
@@ -212,7 +226,7 @@ Direcciones locales esperadas:
 
 ## Contratos de API actuales y previstos
 
-Los endpoints de autenticación, perfil, Kardex, calificaciones y horario están implementados. Las cuatro rutas académicas rechazan solicitudes sin cookie con `401`. La funcionalidad adicional sigue pendiente de elección y la nota final oficial de calificaciones requiere confirmación. Rebo debe coordinar cualquier cambio de contrato con Emilio.
+Los endpoints de autenticación, perfil, Kardex, calificaciones y horario están implementados. Las cuatro rutas académicas rechazan solicitudes sin cookie con `401`. Calificaciones entrega parciales; Kardex entrega los resultados finales registrados. La funcionalidad adicional sigue pendiente de elección. Rebo debe coordinar cualquier cambio de contrato con Emilio.
 
 | Método y ruta | Solicitud | Respuesta esperada | Responsable |
 |---|---|---|---|
@@ -223,9 +237,9 @@ Los endpoints de autenticación, perfil, Kardex, calificaciones y horario están
 | `GET /student/grades` | Cookie de sesión | `200 { grades: StudentGrades }`; períodos, materias y evaluaciones normalizadas | Emilio |
 | `GET /student/kardex` | Cookie de sesión | `200 { kardex: StudentKardex }` normalizado; confirmación HTTP final pendiente | Emilio |
 | `GET /student/schedule` | Cookie de sesión | `200 { schedule: StudentSchedule }`; `401` sin cookie | Emilio |
-| Rutas de funcionalidad adicional | Por definir | Por definir tras seleccionar propuesta | Ambos |
+| Rutas de funcionalidad adicional | Por definir | Por definir tras seleccionar propuesta | Rebo lidera, Emilio apoya y revisa |
 
-El contrato de perfil anterior ya está implementado; los contratos pendientes deben acordarse antes de conectar sus pantallas. Rebo no debe inventar campos institucionales ni exponer tokens en la interfaz. `/auth/session` valida la sesión local; un JWT institucional inválido se detecta al consultar SII y el controlador de perfil revoca entonces la sesión y devuelve `401`.
+Los cuatro contratos académicos anteriores están implementados. Rebo no debe inventar campos institucionales ni exponer tokens en la interfaz. `/auth/session` valida la sesión local; un JWT institucional inválido se detecta al consultar SII y los controladores académicos revocan entonces la sesión y devuelven `401` si la revocación tiene éxito. Los contratos de la función extra se acuerdan antes de implementarla.
 
 ## Tareas de Rebo en orden sugerido
 
@@ -249,22 +263,31 @@ Restricciones:
 - Usar `credentials: 'include'` en las solicitudes futuras al backend.
 - No presentar una simulación como si fuera integración real; el login debe consumir el backend disponible mediante `credentials: 'include'`.
 
-### 2. Calificaciones y horario
+### 2. Dashboard y Kardex
+
+Ramas sugeridas: `feature/dashboard-ui` y `feature/kardex-ui`, una tarea a la vez.
+
+- Consumir `/student/profile` para el dashboard con indicadores de créditos, avance y promedios; distinguir `null` de cero.
+- Consumir `/student/kardex` para el historial completo por materia/período y su resultado final institucional; conservar intentos y etiquetas textuales.
+- Reutilizar cliente HTTP, sesión y navegación del login; no crear otro mecanismo de autenticación.
+- Añadir carga, error, vacío y navegación entre secciones. Coordinar con Emilio cualquier dato no incluido en los DTO; `persona` no se expone aún.
+
+### 3. Calificaciones y horario
 
 Rama sugerida: `feature/grades-schedule-ui`.
 
 Objetivo:
 
-- Pantalla de calificaciones con tabla o tarjetas, materia, período, nota final, búsqueda/filtro en tiempo real e indicadores verde/amarillo/rojo según el desempeño.
+- Pantalla de calificaciones con tabla o tarjetas, materia, período y parciales disponibles, búsqueda/filtro en tiempo real e indicadores de desempeño; aplicar el criterio académico anterior. Los resultados finales registrados se muestran en Kardex.
 - Pantalla de horario organizada por día y hora, en formato de agenda o tabla.
 - Estados de carga, error y sin datos.
-- Consumir únicamente `GET /student/grades` y `GET /student/schedule` cuando Emilio los entregue.
+- Consumir únicamente `GET /student/grades` y `GET /student/schedule`, disponibles tras integrar los PR correspondientes.
 
-### 3. Funcionalidad adicional de impacto: pendiente de decisión
+### 4. Funcionalidad adicional de impacto: pendiente de decisión
 
-No iniciar esta fase hasta que Emilio y Rebo seleccionen y justifiquen una propuesta. Cuando exista decisión, se definirá rama, modelo de datos, API propia e interfaz sin mezclar datos propios con datos institucionales.
+No iniciar esta fase hasta que Emilio y Rebo seleccionen y justifiquen una propuesta. Rebo lidera su implementación completa (interfaz, lógica, persistencia y módulo de administración/backend necesarios); Emilio apoya el diseño, revisa seguridad/contratos e integración y ayuda cuando se coordine. Definir rama y modelo de datos sin mezclar datos propios con datos institucionales ni duplicar sesiones. El reparto de ayuda se concreta al elegir el alcance.
 
-### 4. Pruebas de UI, responsive y documentación
+### 5. Pruebas de UI, responsive, despliegue frontend y documentación
 
 Rama sugerida: `feature/ui-quality-documentation`.
 
@@ -272,7 +295,8 @@ Objetivo:
 
 - Revisar interfaz en móvil, tablet y escritorio.
 - Validar carga, errores, navegación y accesibilidad básica.
-- Preparar capturas reales para README cuando existan funcionalidades conectadas.
+- Configurar y probar el despliegue frontend en coordinación con el backend de Emilio.
+- Preparar capturas reales para README al terminar la práctica, según lo acordado por Emilio.
 - Actualizar README y `DOCUMENTACION.md` con los cambios del commit correspondiente.
 
 ## Regla de documentación
@@ -287,7 +311,7 @@ Objetivo:
 
 Este archivo no sustituye al README: el README se orienta a instalar y ejecutar; `DOCUMENTACION.md` explica la arquitectura y lógica interna.
 
-Actualizar las secciones existentes cuando cambie un archivo o contrato; no repetir una sección por cada modificación. Mantener `CONTEXTO.md` sincronizado cuando cambien contratos, responsabilidades o decisiones que afecten a Rebo. El README actual es provisional; sus capturas y versión final se completarán al terminar la práctica.
+Actualizar las secciones existentes cuando cambie un archivo o contrato; no repetir una sección por cada modificación. Mantener `CONTEXTO.md` sincronizado cuando cambien contratos, responsabilidades o decisiones que afecten a Rebo. El README solo describe tecnología, instalación, ejecución y funcionamiento actuales; no incluir roadmap, propuestas extra, despliegues previstos ni listas de tareas futuras. Pendientes y planificación pertenecen a este archivo y a `DOCUMENTACION.md`. Las capturas se incorporan al terminar la práctica; mientras no existan, indicar únicamente su ausencia actual, sin simular evidencia.
 
 ## Reglas de seguridad y calidad
 

@@ -1,32 +1,22 @@
-# React + TypeScript + Vite
+# Frontend — React + Vite + TypeScript
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Aplicación frontend del monorepo del Examen 3. El estado local documentado contiene la plantilla inicial de Vite.
 
-Currently, two official plugins are available:
+- React proporciona los componentes de interfaz.
+- Vite ejecuta el servidor de desarrollo y genera la compilación.
+- TypeScript comprueba los tipos.
+- Oxlint realiza el análisis estático configurado.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Desde la raíz del repositorio:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm run dev:frontend
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+El servidor de desarrollo usa normalmente `http://localhost:5173`. El backend se inicia en otra terminal con `npm run dev:backend`.
+
+El navegador consume únicamente la API propia de Express; las solicitudes autenticadas incluyen `credentials: 'include'`. Las claves de Supabase y el JWT institucional pertenecen exclusivamente al backend.
+
+El responsable del frontend completo es Rebo, incluidos login, dashboard, Kardex, calificaciones, horario, navegación y estados de interfaz.
+
+Las instrucciones de instalación y ejecución están en el [README principal](../README.md); los contratos y el reparto del equipo, en [CONTEXTO.md](../CONTEXTO.md).
