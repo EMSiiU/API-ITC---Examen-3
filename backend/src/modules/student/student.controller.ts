@@ -14,6 +14,8 @@ import {
     getStudentProfile,
 } from '../sii/sii.client.js';
 import { SiiApiError } from '../sii/sii-api.error.js';
+import { ZodError } from 'zod';
+import { parseStudentProfile } from './student-profile.dto.js';
 
 export async function getProfile(
     request: Request,
@@ -22,12 +24,18 @@ export async function getProfile(
     const session = getAuthenticatedSession(request);
 
     try {
-        const profile = await getStudentProfile(session.siiToken);
+        const rawProfile = await getStudentProfile(session.siiToken);
+        const profile = parseStudentProfile(rawProfile);
 
-        response.status(200).json({
-        profile,
-        });
+        response.status(200).json({profile,});
     } catch (error) {
+        if (error instanceof ZodError) {
+            response.status(502).json({
+                message: 'The institutional service returned an invalid profile response.',
+            });
+            return;
+        }
+
         if (error instanceof SiiApiError) {
         if (error.code === 'invalid_session') {
             await revokeSession(session.id);
@@ -42,6 +50,8 @@ export async function getProfile(
             });
             return;
         }
+
+        
 
         if (error.code === 'invalid_response') {
             response.status(502).json({
