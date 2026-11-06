@@ -65,3 +65,62 @@ export const cancelReservation = async (loanId: string, studentId: string): Prom
   }
   return response.json();
 };
+
+export const getAdminLoans = async (): Promise<Loan[]> => {
+  const response = await fetch(`${API_URL}/resources/admin/loans`, { credentials: 'include' });
+  if (!response.ok) throw new Error('Error al cargar la lista global de préstamos');
+  return response.json();
+};
+
+export const markAsReturned = async (loanId: string): Promise<any> => {
+  const response = await fetch(`${API_URL}/resources/admin/loans/${loanId}/return`, {
+    method: 'POST',
+    credentials: 'include'
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Error al devolver el recurso');
+  }
+  return response.json();
+};
+
+export const markAsActive = async (loanId: string): Promise<any> => {
+  const response = await fetch(`${API_URL}/resources/admin/loans/${loanId}/activate`, {
+    method: 'POST',
+    credentials: 'include'
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Error al entregar el recurso');
+  }
+  return response.json();
+};
+
+export const createAdminResource = async (resourceData: any): Promise<Resource> => {
+  const response = await fetch(`${API_URL}/resources/admin/catalog`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(resourceData),
+    credentials: 'include'
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Error al crear el recurso');
+  }
+  return response.json();
+};
+
+export const adjustResourceStock = async (id: string, delta: number): Promise<Resource> => {
+  const response = await fetch(`${API_URL}/resources/admin/catalog/${id}/stock`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ delta }),
+    credentials: 'include'
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Error al ajustar el stock');
+  }
+  return response.json();
+};
