@@ -49,6 +49,13 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 - Prueba real posterior a las correcciones: login, sesión y los cuatro recursos `200`; logout `204`; reutilización de sesión `401`. Solo se creó y revocó la sesión de esa prueba, sin eliminar historial ni registrar secretos.
 - Compilación y validación de tipos exitosas.
 
+### Enrutamiento base del Frontend (`frontend/src/App.tsx`)
+1. **Problema que resuelve:** Permite la navegación en la SPA de React sin recargar la página, preparando el terreno para proteger rutas.
+2. **Por qué existe:** Para separar las pantallas públicas (Login) de las privadas (Dashboard, Kardex, etc.).
+3. **Entradas y salidas:** Recibe la URL actual del navegador y renderiza el componente correspondiente. Redirige cualquier ruta desconocida a `/login`.
+4. **Conexiones:** Reemplaza la plantilla inicial de Vite. Es el componente raíz envuelto por `main.tsx`.
+5. **Pendiente y consumidor futuro:** Rebo implementará la protección de rutas con el contexto de sesión en los próximos pasos y diseñará las pantallas reales.
+
 ### Pendiente
 
 - Rutas y componentes de interfaz.
