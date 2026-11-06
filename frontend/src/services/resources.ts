@@ -17,12 +17,11 @@ export const getResources = async (): Promise<Resource[]> => {
   return response.json();
 };
 
-export const reserveResource = async (resourceId: string): Promise<any> => {
-  // Nota: En el futuro, si el middleware de auth ya inyecta el ID, podríamos quitar el body
+export const reserveResource = async (resourceId: string, studentId: string): Promise<any> => {
   const response = await fetch(`${API_URL}/resources/reserve/${resourceId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ studentId: 'ALUMNO_MOCK_123' }), // Fallback temporal
+    body: JSON.stringify({ studentId }), 
     credentials: 'include'
   });
   

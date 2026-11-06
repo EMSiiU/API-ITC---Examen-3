@@ -1,51 +1,62 @@
 import { useState, useEffect } from 'react';
 import { Package, CheckCircle } from 'lucide-react';
 import { getResources, reserveResource, type Resource } from '../../services/resources';
+import { getStudentProfile } from '../../services/student';
 import styles from './Resources.module.css';
 
 const Resources = () => {
   const [resources, setResources] = useState<Resource[]>([]);
+  const [studentId, setStudentId] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reservingId, setReservingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    fetchResources();
+    const initData = async () => {
+      try {
+        setLoading(true);
+        // Hacemos ambas peticiones en paralelo para no perder tiempo
+        const [resourcesData, profileData] = await Promise.all([
+          getResources(),
+          getStudentProfile()
+        ]);
+        
+        setResources(resourcesData);
+        // Asumiendo que tu perfil devuelve 'controlNumber' o 'id'
+        setStudentId(profileData.controlNumber); 
+      } catch (err) {
+        setError('No se pudo cargar la información necesaria.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    initData();
   }, []);
 
-  const fetchResources = async () => {
-    try {
-      setLoading(true);
-      const data = await getResources();
-      setResources(data);
-    } catch (err) {
-      setError('No se pudo cargar el catálogo de recursos.');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleReserve = async (id: string) => {
+    if (!studentId) {
+      setMessage({ text: 'Error de sesión: No se encontró tu número de control.', type: 'error' });
+      return;
+    }
+
     try {
       setReservingId(id);
       setMessage(null);
-      await reserveResource(id);
+      
+      // Le pasamos el NC real
+      await reserveResource(id, studentId);
       
       setMessage({ text: '¡Recurso reservado con éxito! Tienes 3 días para recogerlo.', type: 'success' });
-      
-      // Actualizamos el stock localmente para que se refleje de inmediato
       setResources(prev => prev.map(res => 
         res.id === id ? { ...res, available_stock: res.available_stock - 1 } : res
       ));
-      
     } catch (err: any) {
       setMessage({ text: err.message || 'Error al reservar el recurso.', type: 'error' });
     } finally {
       setReservingId(null);
-      
-      // Limpiar el mensaje después de unos segundos
       setTimeout(() => setMessage(null), 5000);
     }
   };
