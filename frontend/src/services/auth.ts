@@ -37,4 +37,19 @@ export const authService = {
 
     return response.json();
   },
+
+  // Función de Logout que destruye la cookie
+  logout: async () => {
+    const response = await fetch(`${API_URL}/auth/logout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al cerrar sesión');
+    }
+  }
 };
