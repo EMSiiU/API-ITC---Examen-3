@@ -2,6 +2,8 @@
 
 Aplicación web para consultar perfil académico, Kardex, calificaciones por parcial y horario del SII ITC. Incluye un Centro de Préstamos para consultar recursos, solicitar préstamos y gestionar su inventario.
 
+Aplicación en Render: [https://api-itc-frontend.onrender.com/login](https://api-itc-frontend.onrender.com/login).
+
 ## Tecnologías utilizadas
 
 | Tecnología | Uso |
@@ -53,8 +55,6 @@ En `backend/.env`, habilita las variables comentadas que correspondan y completa
 | `SII_API_BASE_URL` | `https://sii.celaya.tecnm.mx` |
 
 Conserva las demás opciones de la plantilla. Si se comparte la base de sesiones, utiliza la misma llave de cifrado del equipo. Solicita los valores privados por un canal seguro; no subas los archivos `.env` al repositorio.
-
-La instalación de dependencias no crea las tablas de Supabase. La configuración de sesiones está descrita en [DOCUMENTACION.md](DOCUMENTACION.md).
 
 ### Configuración del frontend
 
