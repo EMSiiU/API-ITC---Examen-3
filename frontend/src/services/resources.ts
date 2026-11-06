@@ -96,3 +96,31 @@ export const markAsActive = async (loanId: string): Promise<any> => {
   }
   return response.json();
 };
+
+export const createAdminResource = async (resourceData: any): Promise<Resource> => {
+  const response = await fetch(`${API_URL}/resources/admin/catalog`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(resourceData),
+    credentials: 'include'
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Error al crear el recurso');
+  }
+  return response.json();
+};
+
+export const adjustResourceStock = async (id: string, delta: number): Promise<Resource> => {
+  const response = await fetch(`${API_URL}/resources/admin/catalog/${id}/stock`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ delta }),
+    credentials: 'include'
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Error al ajustar el stock');
+  }
+  return response.json();
+};

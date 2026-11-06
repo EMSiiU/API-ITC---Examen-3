@@ -145,6 +145,16 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
    - Extrae el número de control del alumno mediante `getStudentProfile()` y lo envía a `POST /resources/reserve/:id`. Al tener éxito, el stock de la tarjeta se actualiza localmente para dar retroalimentación visual inmediata.
 4. **Gestión de Préstamos:** Implementa un sistema de pestañas que incluye la vista "Mis Préstamos". Esta sección renderiza el estado actual de cada artículo reservado y habilita un botón condicional para "Cancelar Reserva" si el artículo aún no ha sido recogido, el cual actualiza el inventario en tiempo real.
 
+### Panel de Administración de Recursos (Backend y Frontend)
+1. **Problema que resuelve:** Otorga al personal de la institución (ventanilla/laboratorio) las herramientas para gestionar el ciclo de vida real de los préstamos y administrar el catálogo maestro de recursos, sin interferir con la tabla de usuarios de los alumnos.
+2. **Estrategia de Seguridad ("God User"):** Para no modificar la base de datos de autenticación original de la escuela, el sistema identifica al administrador comparando el número de control del usuario activo contra la variable de entorno `VITE_ADMIN_CONTROL_NUMBER`. Si coincide, el frontend oculta la vista de estudiante y despliega el panel de control.
+3. **Gestión de Préstamos (Flujo de Ventanilla):**
+   - El administrador visualiza una tabla global con todas las reservas de la escuela (`GET /resources/admin/loans`).
+   - Cuando el alumno recoge el equipo, el admin ejecuta `POST /resources/admin/loans/:id/activate`, cambiando el estado a `active`.
+   - Cuando el alumno devuelve el equipo, ejecuta `POST /resources/admin/loans/:id/return`. Esto cambia el estado a `returned` y automáticamente devuelve `+1` al stock del inventario.
+4. **Gestión de Catálogo (Inventario):**
+   - **Creación:** A través de un formulario modal, el admin consume `POST /resources/admin/catalog` para registrar nuevo equipo. El frontend actualiza la vista inmediatamente agregando la tarjeta sin recargar la página.
+   - **Ajuste de Stock:** Los botones dinámicos en las tarjetas consumen `PATCH /resources/admin/catalog/:id/stock` enviando deltas de `+1` o `-1`. El backend cuenta con una validación estricta que impide reducir el inventario si el artículo se encuentra prestado (stock disponible < 0).
 
 ### Pendiente
 
