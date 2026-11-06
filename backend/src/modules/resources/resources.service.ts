@@ -83,3 +83,41 @@ export const getStudentLoans = async (studentId: string) => {
   if (error) throw new Error('Error al obtener los préstamos del alumno');
   return data;
 };
+
+// Cancelar un prestamo que aun no se recoge
+export const cancelReservation = async (loanId: string, studentId: string) => {
+  // 1. Validar que el préstamo exista, sea del alumno y esté pendiente
+  const { data: loan, error: fetchError } = await supabase
+    .from('loans')
+    .select('*')
+    .eq('id', loanId)
+    .eq('student_id', studentId)
+    .single();
+
+  if (fetchError || !loan) throw new Error('Reserva no encontrada.');
+  if (loan.status !== 'pending_pickup') throw new Error('Solo se pueden cancelar reservas pendientes por recoger.');
+
+  // 2. Cambiar estado a cancelado
+  const { error: cancelError } = await supabase
+    .from('loans')
+    .update({ status: 'cancelled' })
+    .eq('id', loanId);
+
+  if (cancelError) throw new Error('Error al cancelar la reserva.');
+
+  // 3. Devolver +1 al stock disponible
+  const { data: resource } = await supabase
+    .from('resources')
+    .select('available_stock')
+    .eq('id', loan.resource_id)
+    .single();
+
+  if (resource) {
+    await supabase
+      .from('resources')
+      .update({ available_stock: resource.available_stock + 1 })
+      .eq('id', loan.resource_id);
+  }
+
+  return { message: 'Reserva cancelada con éxito.' };
+};

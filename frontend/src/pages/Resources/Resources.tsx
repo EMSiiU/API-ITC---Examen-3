@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Package, CheckCircle, List, CalendarClock } from 'lucide-react';
-import { getResources, reserveResource, getMyLoans, type Resource, type Loan } from '../../services/resources';
+import { getResources, reserveResource, getMyLoans, cancelReservation, type Resource, type Loan } from '../../services/resources';
 import { getStudentProfile } from '../../services/student';
 import styles from './Resources.module.css';
 
@@ -69,12 +69,37 @@ const Resources = () => {
     }
   };
 
+  const handleCancel = async (loanId: string) => {
+  if (!studentId) return;
+  if (!window.confirm('¿Estás seguro de que deseas cancelar esta reserva?')) return;
+
+  try {
+    setMessage(null);
+    await cancelReservation(loanId, studentId);
+    
+    setMessage({ text: 'Reserva cancelada. El inventario ha sido actualizado.', type: 'success' });
+    
+    // Recargar datos para tener los stocks correctos y la vista actualizada
+    const [resourcesData, loansData] = await Promise.all([
+      getResources(),
+      getMyLoans(studentId)
+    ]);
+    setResources(resourcesData);
+    setMyLoans(loansData);
+  } catch (err: any) {
+    setMessage({ text: err.message || 'Error al cancelar.', type: 'error' });
+  } finally {
+    setTimeout(() => setMessage(null), 5000);
+  }
+};
+
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       pending_pickup: 'Por recoger',
       active: 'En préstamo',
       returned: 'Devuelto',
-      overdue: 'Atrasado'
+      overdue: 'Atrasado',
+      cancelled: 'Cancelado'
     };
     return labels[status] || status;
   };
@@ -149,6 +174,24 @@ const Resources = () => {
                   <strong>Devolver antes del:</strong> {new Date(loan.due_date).toLocaleDateString()}
                 </span>
               </div>
+              {loan.status === 'pending_pickup' && (
+                <button 
+                  onClick={() => handleCancel(loan.id)}
+                  style={{
+                    marginTop: '0.75rem',
+                    padding: '0.5rem',
+                    backgroundColor: '#fee2e2',
+                    color: '#991b1b',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  Cancelar Reserva
+                </button>
+              )}
             </div>
           </div>
         ))}

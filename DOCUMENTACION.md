@@ -131,14 +131,19 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 ### Módulo de Préstamo de Recursos (Backend)
 1. **Problema que resuelve:** Gestiona la lógica transaccional de apartados de biblioteca y laboratorios, asegurando la integridad del inventario escolar.
 2. **Tablas implementadas (Supabase):** `resources` (catálogo y control de stock) y `loans` (registro histórico y estados de préstamo).
-3. **Lógica de Negocio Principal (Express):** El endpoint `POST /api/resources/reserve/:id` verifica primero el `available_stock`. Si es mayor a 0, aparta el recurso restando 1 al stock y genera el registro en `loans` con estado `pending_pickup` y una fecha de vencimiento calculada a 3 días.
-4. **Manejo de Fallos:** Si la inserción del préstamo falla, el servicio ejecuta un rollback manual que restaura el `available_stock` en Supabase para evitar discrepancias en el inventario.
+3. **Lógica de Negocio Principal (Express):** 
+   - `POST /resources/reserve/:id`: Verifica el `available_stock`. Si es mayor a 0, aparta el recurso restando 1 al stock y genera el registro en `loans` con estado `pending_pickup` y vencimiento a 3 días.
+   - `GET /resources/loans/:studentId`: Cruza la información de préstamos con el catálogo (JOIN) para devolver el historial completo del alumno.
+   - `POST /resources/loans/:id/cancel`: Permite cancelar una reserva en estado `pending_pickup`, ejecutando un rollback que suma `+1` al stock disponible del recurso.
+4. **Manejo de Fallos:** Si la inserción inicial de un préstamo falla, el servicio ejecuta un rollback manual que restaura el `available_stock` en Supabase para evitar discrepancias.
 
 ### Catálogo de Recursos (Frontend - Vista Estudiante) (`frontend/src/pages/Resources/`)
-1. **Problema que resuelve:** Permite al alumno explorar el inventario de la institución (libros, equipo de laboratorio, cubículos) y apartarlos sin tener que ir físicamente a preguntar por disponibilidad.
-2. **Por qué existe:** Para cumplir el requerimiento del profesor de diseñar una funcionalidad adicional que aporte valor real, y que a la vez separe la vista pública de un backend administrativo.
-3. **Entradas y salidas:** Consume el endpoint `GET /api/resources` para pintar el catálogo. Para reservar, extrae el número de control del alumno mediante `getStudentProfile()` y ejecuta `POST /api/resources/reserve/:id`. Si tiene éxito, el stock de la tarjeta se actualiza localmente para dar retroalimentación visual inmediata.
-4. **Pendiente:** Agregar la sección o pestaña de "Mis Préstamos" para que el estudiante consulte sus reservas activas y fechas límite.
+1. **Problema que resuelve:** Permite al alumno explorar el inventario de la institución (libros, equipo, cubículos), apartarlos y gestionar sus reservas sin tener que acudir físicamente.
+2. **Por qué existe:** Para cumplir el requerimiento del profesor de diseñar una funcionalidad adicional que aporte valor real, separando la vista pública de un futuro backend administrativo.
+3. **Entradas y salidas:** 
+   - Consume `GET /resources` para pintar el catálogo. 
+   - Extrae el número de control del alumno mediante `getStudentProfile()` y lo envía a `POST /resources/reserve/:id`. Al tener éxito, el stock de la tarjeta se actualiza localmente para dar retroalimentación visual inmediata.
+4. **Gestión de Préstamos:** Implementa un sistema de pestañas que incluye la vista "Mis Préstamos". Esta sección renderiza el estado actual de cada artículo reservado y habilita un botón condicional para "Cancelar Reserva" si el artículo aún no ha sido recogido, el cual actualiza el inventario en tiempo real.
 
 
 ### Pendiente

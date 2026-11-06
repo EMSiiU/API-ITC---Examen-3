@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getAvailableResources, reserveResource, getStudentLoans } from './resources.service.js';
+import { getAvailableResources, reserveResource, getStudentLoans, cancelReservation } from './resources.service.js';
 
 export const getAllResources = async (req: Request, res: Response) => {
   try {
@@ -31,5 +31,17 @@ export const getMyLoans = async (req: Request, res: Response) => {
     res.json(loans);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+export const cancelMyReservation = async (req: Request, res: Response) => {
+  try {
+    const loanId = req.params.id as string;
+    const studentId = req.body.studentId as string;
+    
+    const result = await cancelReservation(loanId, studentId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
 };
