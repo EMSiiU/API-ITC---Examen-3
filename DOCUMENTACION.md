@@ -49,6 +49,41 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 - Prueba real posterior a las correcciones: login, sesión y los cuatro recursos `200`; logout `204`; reutilización de sesión `401`. Solo se creó y revocó la sesión de esa prueba, sin eliminar historial ni registrar secretos.
 - Compilación y validación de tipos exitosas.
 
+### Enrutamiento base del Frontend (`frontend/src/App.tsx`)
+1. **Problema que resuelve:** Permite la navegación en la SPA de React sin recargar la página, preparando el terreno para proteger rutas.
+2. **Por qué existe:** Para separar las pantallas públicas (Login) de las privadas (Dashboard, Kardex, etc.).
+3. **Entradas y salidas:** Recibe la URL actual del navegador y renderiza el componente correspondiente. Redirige cualquier ruta desconocida a `/login`.
+4. **Conexiones:** Reemplaza la plantilla inicial de Vite. Es el componente raíz envuelto por `main.tsx`.
+5. **Pendiente y consumidor futuro:** Rebo implementará la protección de rutas con el contexto de sesión en los próximos pasos y diseñará las pantallas reales.
+
+### Capa de Servicios API - Autenticación (`frontend/src/services/auth.ts`)
+1. **Problema que resuelve:** Centraliza la comunicación con el backend para los flujos de login y verificación de sesión, evitando repetir código fetch en los componentes.
+2. **Por qué existe:** Para garantizar que todas las peticiones de autenticación incluyan estrictamente la configuración `credentials: 'include'`, vital para el manejo de cookies HTTP-only.
+3. **Entradas y salidas:** `login` recibe credenciales y devuelve datos del usuario o lanza un error. `checkSession` no recibe argumentos, verifica la validez de la cookie en el backend y devuelve el estado de la sesión.
+4. **Conexiones:** Se comunica directamente con los endpoints `POST /auth/login` y `GET /auth/session` del backend.
+5. **Pendiente y consumidor futuro:** Será consumido por el contexto global de sesión y la pantalla de Login que construirá Rebo en los siguientes pasos.
+
+### Contexto Global de Autenticación (`frontend/src/context/AuthContext.tsx`)
+1. **Problema que resuelve:** Mantiene el estado de la sesión (`isAuthenticated`, `isLoading`) accesible para cualquier componente de la aplicación sin tener que pasar props (prop drilling).
+2. **Por qué existe:** Para que la UI reaccione globalmente a cambios de sesión y valide el acceso en el primer renderizado llamando al backend.
+3. **Entradas y salidas:** Provee un proveedor (`AuthProvider`) que envuelve la app y un hook (`useAuth`) para consumir los estados y la función `checkAuth`.
+4. **Conexiones:** Consume `authService.checkSession()` para confirmar el acceso real contra el backend de Emilio usando la cookie `httpOnly`.
+5. **Pendiente y consumidor futuro:** Será consumido por `ProtectedRoute` y, en el siguiente paso, por el formulario de Login para actualizar el estado tras iniciar sesión.
+
+### Protección de Rutas (`frontend/src/components/ProtectedRoute.tsx`)
+1. **Problema que resuelve:** Impide el acceso visual a rutas académicas si el usuario no cuenta con una cookie de sesión validada por el backend.
+2. **Por qué existe:** Para cumplir el requerimiento de redirigir al login al perder la sesión o intentar entrar directamente mediante URL.
+3. **Entradas y salidas:** Renderiza a sus rutas hijas (`<Outlet />`) si hay sesión. Retorna `<Navigate to="/login" />` si el usuario no está autenticado, o un mensaje de carga mientras verifica.
+4. **Conexiones:** Consume el hook `useAuth` del `AuthContext`. Se implementa en `App.tsx` usando las rutas anidadas de React Router.
+5. **Pendiente y consumidor futuro:** Actualmente protege el Dashboard. Rebo lo usará para proteger Kardex, Calificaciones y Horario.
+
+### Interfaz de Login (`frontend/src/pages/Login/`)
+1. **Problema que resuelve:** Proporciona la interfaz visual segura (sin exponer JWT en local storage) para que los alumnos ingresen sus credenciales.
+2. **Por qué existe:** Para fusionar la identidad institucional (logos) con una UI moderna de pantalla dividida (split-screen), adaptándose a móviles y escritorio.
+3. **Entradas y salidas:** Recibe credenciales del usuario, muestra estados de carga/error, y tras un éxito, actualiza el `AuthContext` y redirige a `/dashboard`.
+4. **Conexiones:** Consume `authService.login()` y `useAuth().checkAuth()`. Utiliza CSS Modules puros para estilos encapsulados.
+5. **Pendiente y consumidor futuro:** Servirá como la puerta de entrada exclusiva a la app. Emilio no necesita intervenir aquí ya que consume el endpoint `POST /auth/login` directamente.
+
 ### Pendiente
 
 - Rutas y componentes de interfaz.
