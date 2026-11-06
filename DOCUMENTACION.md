@@ -84,6 +84,20 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 4. **Conexiones:** Consume `authService.login()` y `useAuth().checkAuth()`. Utiliza CSS Modules puros para estilos encapsulados.
 5. **Pendiente y consumidor futuro:** Servirá como la puerta de entrada exclusiva a la app. Emilio no necesita intervenir aquí ya que consume el endpoint `POST /auth/login` directamente.
 
+### Layout Principal y Navegación (`frontend/src/components/Layout/`)
+1. **Problema que resuelve:** Proporciona un marco visual (cascarón) que se repite en todas las pantallas protegidas (Dashboard, Kardex, Horario), manteniendo la navegación constante sin recargar la página.
+2. **Por qué existe:** Para organizar la interfaz con una barra lateral (Sidebar) oscura que contiene las opciones del menú y el botón de cierre de sesión, separándola del área principal de contenido.
+3. **Entradas y salidas:** Renderiza a sus rutas hijas (`<Outlet />`) en el contenedor derecho. El botón de logout revoca la sesión y redirige al login.
+4. **Conexiones:** En `App.tsx` envuelve a las rutas privadas. Consume la función `logout` de `AuthContext` y utiliza `lucide-react` para la iconografía.
+5. **Pendiente y consumidor futuro:** Servirá como base visual y estructural para el Dashboard, Kardex y Horario que Rebo construirá en los próximos pasos.
+
+### Servicio de Perfil Estudiantil (`frontend/src/services/student.ts`)
+1. **Problema que resuelve:** Conecta el frontend con el endpoint protegido de perfil del backend.
+2. **Por qué existe:** Para aislar la lógica de *fetch* y el tipado de los datos académicos del componente visual.
+3. **Entradas y salidas:** Llama a `GET /student/profile` y devuelve un objeto tipado `StudentProfile`. Si el backend responde `401`, lanza un error específico.
+4. **Conexiones:** Utiliza `credentials: 'include'` para enviar la cookie. Será consumido por el Dashboard para mostrar los indicadores de avance.
+5. **Pendiente y consumidor futuro:** El Dashboard que Rebo está a punto de crear lo utilizará para inyectar nombre, foto y promedios.
+
 ### Pendiente
 
 - Rutas y componentes de interfaz.
