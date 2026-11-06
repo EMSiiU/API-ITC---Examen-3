@@ -119,6 +119,13 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 4. **Conexiones:** Se renderiza dentro del componente `Layout` en la ruta `/kardex`. Utiliza el tipado `KardexSubject` y renderiza las calificaciones con *badges* de color.
 5. **Pendiente y consumidor futuro:** La vista de Kardex está completa. El siguiente paso de Rebo será construir la interfaz para el Horario (`feature/schedule-ui`).
 
+### Pantalla de Horario / Carga Académica (`frontend/src/pages/Schedule/`)
+1. **Problema que resuelve:** Presenta la distribución de clases en la semana y el avance de calificaciones parciales por materia. Resuelve el problema de tablas gigantes del diseño original haciéndolo totalmente responsivo.
+2. **Por qué existe:** Para cumplir el requerimiento de visualizar materias inscritas y parciales, sustituyendo la tabla de 10 columnas por tarjetas y una vista de columnas por día (Agenda).
+3. **Entradas y salidas:** Consume simultáneamente `getStudentSchedule` y `getStudentGrades`[cite: 8, 9]. Cruza ambas estructuras mediante `groupId`[cite: 8, 9] para inyectar los arrays de `assessments`[cite: 9] dentro de la tarjeta de la materia.
+4. **Conexiones:** Se renderiza en `/schedule`. Utiliza sistema de pestañas para alternar dos visualizaciones sin hacer re-fetching.
+5. **Pendiente y consumidor futuro:** Con esto cerramos las pantallas académicas principales. El siguiente paso es crear la rama para la funcionalidad extra de la biblioteca.
+
 ### Pendiente
 
 - Rutas y componentes de interfaz.

@@ -4,10 +4,8 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login/Login';
 import Dashboard from './pages/Dashboard/Dashboard';
 import Kardex from './pages/Kardex/Kardex';
+import Schedule from './pages/Schedule/Schedule';
 import Layout from './components/Layout/Layout';
-
-// Componentes temporales para las páginas que faltan
-const HorarioPlaceholder = () => <h1>Horario</h1>;
 
 function App() {
   return (
@@ -22,7 +20,7 @@ function App() {
             <Route element={<Layout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/kardex" element={<Kardex />} />
-              <Route path="/horario" element={<HorarioPlaceholder />} />
+              <Route path="/horario" element={<Schedule />} />
             </Route>
           </Route>
           
