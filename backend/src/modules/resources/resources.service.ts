@@ -121,3 +121,57 @@ export const cancelReservation = async (loanId: string, studentId: string) => {
 
   return { message: 'Reserva cancelada con éxito.' };
 };
+
+// Funciones del Administrador
+export const getAllLoansForAdmin = async () => {
+  // Traemos TODOS los préstamos, cruzando datos para saber qué recurso es
+  const { data, error } = await supabase
+    .from('loans')
+    .select(`
+      *,
+      resources (
+        name,
+        category
+      )
+    `)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error('Error al obtener la lista de préstamos para el administrador.');
+  return data;
+};
+
+export const markLoanAsReturned = async (loanId: string) => {
+  // 1. Validar que el préstamo exista y no esté devuelto ya
+  const { data: loan, error: fetchError } = await supabase
+    .from('loans')
+    .select('*')
+    .eq('id', loanId)
+    .single();
+
+  if (fetchError || !loan) throw new Error('Préstamo no encontrado.');
+  if (loan.status === 'returned') throw new Error('Este recurso ya fue marcado como devuelto anteriormente.');
+
+  // 2. Cambiar el estado a "returned"
+  const { error: updateError } = await supabase
+    .from('loans')
+    .update({ status: 'returned' })
+    .eq('id', loanId);
+
+  if (updateError) throw new Error('Error al actualizar el estado del préstamo.');
+
+  // 3. Devolver +1 al stock disponible para que otro alumno pueda pedirlo
+  const { data: resource } = await supabase
+    .from('resources')
+    .select('available_stock')
+    .eq('id', loan.resource_id)
+    .single();
+
+  if (resource) {
+    await supabase
+      .from('resources')
+      .update({ available_stock: resource.available_stock + 1 })
+      .eq('id', loan.resource_id);
+  }
+
+  return { message: 'Recurso devuelto con éxito. Inventario actualizado.' };
+};
