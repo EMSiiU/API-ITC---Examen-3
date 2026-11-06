@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getAvailableResources, reserveResource } from './resources.service.js';
+import { getAvailableResources, reserveResource, getStudentLoans } from './resources.service.js';
 
 export const getAllResources = async (req: Request, res: Response) => {
   try {
@@ -21,5 +21,15 @@ export const createReservation = async (req: Request, res: Response) => {
   } catch (error: any) {
     const status = error.message.includes('stock') || error.message.includes('existe') ? 400 : 500;
     res.status(status).json({ error: error.message });
+  }
+};
+
+export const getMyLoans = async (req: Request, res: Response) => {
+  try {
+    const studentId = req.params.studentId as string;
+    const loans = await getStudentLoans(studentId);
+    res.json(loans);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 };

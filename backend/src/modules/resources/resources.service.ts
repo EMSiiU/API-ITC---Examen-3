@@ -64,3 +64,22 @@ export const reserveResource = async (studentId: string, resourceId: string) => 
 
   return { message: 'Recurso reservado con éxito', loan };
 };
+
+// Obtener los prestamo de un estudiante
+export const getStudentLoans = async (studentId: string) => {
+  const { data, error } = await supabase
+    .from('loans')
+    .select(`
+      *,
+      resources (
+        name,
+        image_url,
+        category
+      )
+    `)
+    .eq('student_id', studentId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error('Error al obtener los préstamos del alumno');
+  return data;
+};
