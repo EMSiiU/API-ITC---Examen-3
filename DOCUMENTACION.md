@@ -126,6 +126,14 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 4. **Conexiones:** Se renderiza en `/schedule`. Utiliza sistema de pestañas para alternar dos visualizaciones sin hacer re-fetching.
 5. **Pendiente y consumidor futuro:** Con esto cerramos las pantallas académicas principales. El siguiente paso es crear la rama para la funcionalidad extra de la biblioteca.
 
+## Funcionalidad EXTRA 
+
+### Módulo de Préstamo de Recursos (Backend)
+1. **Problema que resuelve:** Gestiona la lógica transaccional de apartados de biblioteca y laboratorios, asegurando la integridad del inventario escolar.
+2. **Tablas implementadas (Supabase):** `resources` (catálogo y control de stock) y `loans` (registro histórico y estados de préstamo).
+3. **Lógica de Negocio Principal (Express):** El endpoint `POST /api/resources/reserve/:id` verifica primero el `available_stock`. Si es mayor a 0, aparta el recurso restando 1 al stock y genera el registro en `loans` con estado `pending_pickup` y una fecha de vencimiento calculada a 3 días.
+4. **Manejo de Fallos:** Si la inserción del préstamo falla, el servicio ejecuta un rollback manual que restaura el `available_stock` en Supabase para evitar discrepancias en el inventario.
+
 ### Pendiente
 
 - Rutas y componentes de interfaz.
