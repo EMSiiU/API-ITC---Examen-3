@@ -1,117 +1,118 @@
 # Aplicación Académica SII ITC — Examen 3
 
-Monorepo en desarrollo con frontend React y una API propia que consulta los datos reales del SII ITC. El backend implementa autenticación, sesiones, perfil, Kardex, calificaciones por parcial y horario. El frontend local contiene la plantilla inicial de Vite.
+Aplicación web para consultar perfil académico, Kardex, calificaciones por parcial y horario del SII ITC. Incluye un Centro de Préstamos para consultar recursos, solicitar préstamos y gestionar su inventario.
 
 ## Tecnologías utilizadas
 
-| Tecnología | Uso actual |
+| Tecnología | Uso |
 |---|---|
-| React | Biblioteca de interfaz basada en componentes; base de la aplicación frontend. |
-| Vite | Servidor de desarrollo con recarga rápida y herramienta de compilación del frontend. |
-| TypeScript | Tipado estático en frontend y backend. |
-| Node.js + Express | Servidor HTTP, rutas de la API propia y comunicación con SII. |
-| Supabase PostgreSQL | Persistencia de sesiones del backend. |
-| Zod | Validación de configuración, entradas y respuestas institucionales. |
+| React + TypeScript | Interfaz organizada en componentes con tipado estático. |
+| Vite | Servidor de desarrollo y compilación del frontend. |
+| React Router | Navegación entre las pantallas de la aplicación. |
+| Node.js + Express + TypeScript | API propia, autenticación e integración con el SII ITC. |
+| Supabase PostgreSQL | Almacenamiento de sesiones, recursos y préstamos. |
 
-React + Vite permite trabajar con una SPA y compilarla como archivos estáticos. Express mantiene la integración institucional y las sesiones fuera del código del navegador. Ambos proyectos se administran como workspaces npm en un solo repositorio.
-
-## Arquitectura y funcionamiento actual
-
-```text
-Frontend React → backend Express → API institucional SII ITC
-                         └──────→ Supabase PostgreSQL (sesiones)
-```
-
-La API propia es el único punto de acceso a los datos institucionales para el frontend. Durante el login, el backend remite las credenciales a SII y cifra el JWT institucional antes de almacenarlo en Supabase. El cliente recibe un identificador aleatorio de sesión en una cookie `httpOnly`; las solicitudes autenticadas utilizan esa cookie y, desde React, requieren `credentials: 'include'`. El JWT no se entrega al frontend.
-
-| Método y ruta propia | Función |
-|---|---|
-| `GET /health` | Salud del backend: `{ "status": "ok" }`. |
-| `POST /auth/login` | Recibe `{ email, password }`, crea la sesión y devuelve `{ authenticated: true }`. |
-| `GET /auth/session` | Comprueba la sesión local; devuelve `{ authenticated: true }` o `401`. |
-| `POST /auth/logout` | Revoca la sesión local, elimina la cookie y devuelve `204`. |
-| `GET /student/profile` | Devuelve `{ profile: StudentProfile }` con el perfil normalizado. |
-| `GET /student/kardex` | Devuelve `{ kardex: StudentKardex }` con el historial académico. |
-| `GET /student/grades` | Devuelve `{ grades: StudentGrades }` con períodos, materias y parciales. |
-| `GET /student/schedule` | Devuelve `{ schedule: StudentSchedule }` con períodos, materias y sesiones. |
-
-Las cuatro rutas académicas requieren una sesión válida y responden `401` sin cookie. En calificaciones se conservan las notas por parcial; un valor `null` indica una nota no disponible, no cero. Kardex conserva la calificación final institucional de cada registro de materia y período, incluidas etiquetas textuales como `AC`; no calcula una final con parciales incompletos.
-
-El perfil incluye `name: string | null`, obtenido del texto institucional `persona`, además de número de control, correo, semestre, foto e indicadores académicos. Un nombre ausente se representa con `null`.
-
-Las cookies con formato inválido se rechazan antes de consultar Supabase. Las mutaciones con origen de navegador ajeno al configurado devuelven `403`. Los errores de API se entregan como JSON; un cuerpo inválido produce `400`, uno mayor de 16 KB produce `413` y una ruta inexistente produce `404`.
-
-## Requisitos locales
-
-- Node.js compatible con el proyecto: versiones 22 a 24.
-- npm 10 o superior.
-- Proyecto Supabase con la tabla `public.app_sessions` y una clave de servidor.
+El proyecto contiene dos aplicaciones: `frontend/` y `backend/`, administradas con workspaces de npm. El frontend consulta exclusivamente nuestro backend; este se comunica con la API institucional. Las sesiones utilizan una cookie `httpOnly` y el token institucional permanece en el servidor. Frontend y backend se despliegan por separado en Render.
 
 ## Instalación
 
-Desde la raíz del repositorio:
+### Requisitos
+
+- Node.js versión 22, 23 o 24 y npm.
+- Acceso al proyecto Supabase del equipo, con sus tablas de sesiones, recursos y préstamos ya configuradas.
+- Una cuenta institucional para iniciar sesión.
+
+Abre una terminal en la raíz del repositorio y ejecuta:
 
 ```powershell
 npm install
+
 if (-not (Test-Path backend/.env)) {
     Copy-Item backend/.env.example backend/.env
 }
+
+if (-not (Test-Path frontend/.env)) {
+    Copy-Item frontend/.env.example frontend/.env
+}
 ```
 
-La copia de la plantilla se realiza solo si todavía no existe `backend/.env`; conserva cualquier configuración local existente.
+### Configuración del backend
 
-Completa `backend/.env` con la configuración del entorno de desarrollo:
+En `backend/.env`, habilita las variables comentadas que correspondan y completa:
 
-| Variable | Configuración |
+| Variable | Valor para desarrollo local |
 |---|---|
+| `NODE_ENV` | `development` |
+| `PORT` | `3000` |
+| `FRONTEND_ORIGIN` | `http://localhost:5173` |
+| `COOKIE_SECURE` | `false` |
+| `COOKIE_SAME_SITE` | `lax` |
 | `SUPABASE_URL` | URL del proyecto Supabase del equipo. |
-| `SUPABASE_SECRET_KEY` | Clave de servidor, exclusiva del backend. |
-| `SII_TOKEN_ENCRYPTION_KEY` | Llave Base64 de 32 bytes para cifrar los tokens de sesión. |
-| `SII_API_BASE_URL` | `https://sii.celaya.tecnm.mx` (las rutas del cliente ya incluyen `/api`). |
-| `FRONTEND_ORIGIN` | `http://localhost:5173`. |
-| `PORT` | `3000`. |
-| `COOKIE_SECURE` | `false` para el entorno HTTP local. |
-| `COOKIE_SAME_SITE` | `lax` para desarrollo local. |
+| `SUPABASE_SECRET_KEY` | Clave de servidor del proyecto Supabase. |
+| `SII_TOKEN_ENCRYPTION_KEY` | Llave Base64 de 32 bytes utilizada por el backend del equipo. |
+| `SII_API_BASE_URL` | `https://sii.celaya.tecnm.mx` |
 
-Las variables de Supabase, cifrado y SII están comentadas en la plantilla: deben habilitarse y completarse en la copia local. No subas `.env` ni sus valores a Git. Si ambos backends usan la misma tabla de sesiones, necesitan la misma llave `SII_TOKEN_ENCRYPTION_KEY`, compartida mediante un canal privado seguro.
+Conserva las demás opciones de la plantilla. Si se comparte la base de sesiones, utiliza la misma llave de cifrado del equipo. Solicita los valores privados por un canal seguro; no subas los archivos `.env` al repositorio.
 
-`npm install` no crea `app_sessions`. La estructura de la tabla y las variables del backend están descritas en [DOCUMENTACION.md](DOCUMENTACION.md); para conectarse al entorno del equipo se utiliza la tabla ya configurada.
+La instalación de dependencias no crea las tablas de Supabase. La configuración de sesiones está descrita en [DOCUMENTACION.md](DOCUMENTACION.md).
 
-## Ejecución local
+### Configuración del frontend
 
-Desde la raíz, abre una terminal para el backend:
+En `frontend/.env`, configura:
+
+```dotenv
+VITE_API_URL=http://localhost:3000
+VITE_ADMIN_CONTROL_NUMBER=
+```
+
+Completa `VITE_ADMIN_CONTROL_NUMBER` con el número de control de la cuenta que muestra la interfaz administrativa del Centro de Préstamos. Esta opción controla la visualización de la interfaz; las variables `VITE_*` son públicas y no deben contener secretos.
+
+## Ejecución
+
+Desde la raíz del repositorio, inicia el backend:
 
 ```powershell
 npm run dev:backend
 ```
 
-En otra terminal ejecuta el frontend:
+En una segunda terminal, también desde la raíz, inicia el frontend:
 
 ```powershell
 npm run dev:frontend
 ```
 
-- Frontend: `http://localhost:5173` (plantilla de Vite en el estado local documentado).
-- Backend: `http://localhost:3000`.
-- Comprobación pública: `http://localhost:3000/health`.
+Abre [http://localhost:5173](http://localhost:5173) e inicia sesión con tu cuenta institucional. Mantén ambas terminales abiertas y utiliza `localhost` en las dos direcciones. Puedes comprobar el backend en [http://localhost:3000/health](http://localhost:3000/health).
 
-Las rutas autenticadas se pueden consultar con Postman: inicia sesión en `/auth/login` y utiliza la cookie guardada para las consultas académicas. El frontend local todavía no contiene una pantalla de login.
+Si modificas los archivos `.env`, reinicia el servicio correspondiente.
 
-## Comprobaciones y compilación
+Para compilar ambas aplicaciones:
 
 ```powershell
-npm run check
-npm test --workspace=backend
 npm run build
 ```
 
-`check` ejecuta el lint del frontend y la comprobación TypeScript del backend. `test` ejecuta 107 comprobaciones aisladas contra Express con dependencias controladas en memoria, sin utilizar `.env`, cuentas ni servicios reales. `build` compila las dos aplicaciones. Los tres comandos pasaron. También se comprobó por separado un ciclo real de login, sesión, los cuatro recursos y logout, con rechazo de reutilización tras cerrar sesión. Las pruebas y sus alcances están registrados en [DOCUMENTACION.md](DOCUMENTACION.md).
+## Capturas de pantalla
 
-## Capturas de funcionamiento
+### Inicio de sesión
 
-Esta versión del README no contiene capturas de funcionamiento.
+![Inicio de sesión](docs/capturas/login.png)
 
-## Documentación del equipo
+### Perfil y resumen académico
 
-- [DOCUMENTACION.md](DOCUMENTACION.md): arquitectura, módulos, funciones, contratos y validaciones.
-- [CONTEXTO.md](CONTEXTO.md): reparto entre Emilio y Rebo, decisiones, pendientes e instrucciones para sus agentes de IA.
+![Perfil y resumen académico](docs/capturas/dashboard.png)
+
+### Kardex
+
+![Kardex](docs/capturas/kardex.png)
+
+### Horario y calificaciones por parcial
+
+![Horario y calificaciones por parcial](docs/capturas/horario.png)
+
+### Centro de Préstamos
+
+![Centro de Préstamos](docs/capturas/prestamos.png)
+
+### Reserva de recursos
+
+![Reserva de recursos](docs/capturas/reserva.png)

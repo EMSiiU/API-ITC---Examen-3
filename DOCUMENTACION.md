@@ -25,144 +25,199 @@ Para cada código que se agregue o cambie de forma relevante, esta documentació
 
 ## Estado actual
 
-El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante backend propio, sesiones cifradas en Supabase y endpoints protegidos de perfil, Kardex, calificaciones y horario con DTO propios. El doble envío de horario está corregido y Emilio confirmó que la consulta sigue funcionando. Las pantallas funcionales siguen pendientes en el frontend local revisado. El criterio de presentación está acordado: parciales disponibles del período actual en Calificaciones y resultados finales institucionales por materia/período en Kardex, sin calcular una final propia.
+Revisión del 6 de noviembre de 2026 sobre el código integrado mediante pull. Ya existen frontend académico, backend institucional y Centro de Préstamos con panel administrativo. Emilio informó que Rebo desplegó frontend y backend en Render y que funciona allí. Esta revisión no recibió URLs ni inspeccionó Render: distingue ese reporte de la evidencia local.
+
+El frontend dejó de ser la plantilla Vite: incluye login, navegación privada, dashboard, Kardex, carga académica con parciales y recursos. El planificador fue una propuesta anterior; la función extra elegida e implementada es el Centro de Préstamos.
+
+No quedan tareas antiguas de crear esas pantallas/elegir extra. Sí se detectaron problemas reales de autorización/inventario en recursos y diferencias de interfaz frente al contrato académico. No deben declararse resueltos por el hecho de que el despliegue funcione.
 
 ### Implementado
 
-- Monorepo con frontend y backend independientes.
-- Frontend creado con React, Vite y TypeScript.
-- Backend creado con Node.js, Express y TypeScript.
-- Endpoint de salud `GET /health`.
-- CORS restringido a un origen configurado.
-- Base para sesiones mediante cookie `httpOnly`.
-- Validación de variables de entorno del backend.
-- Cliente de Supabase exclusivo de backend.
-- Tabla `public.app_sessions` utilizada en Supabase para persistir sesiones.
-- Login real SII ITC, cookie `httpOnly`, revocación y middleware reutilizable de sesión.
-- Endpoint protegido `GET /student/profile` conectado a SII ITC.
-- Endpoint protegido `GET /student/kardex`, con consulta institucional real y normalización a `StudentKardex`.
-- Endpoint protegido `GET /student/grades`, con consulta real de calificaciones y normalización a `StudentGrades` por períodos, materias y evaluaciones.
-- Ruta `GET /student/schedule`, consulta institucional de horario y DTO `StudentSchedule`; respuesta duplicada corregida y funcionamiento autenticado confirmado por Emilio.
-- Prueba HTTP local: las cuatro rutas académicas devuelven `401` sin cookie.
-- Validación UUID de cookies, logout que borra cookie aun si falla la revocación, protección de origen en mutaciones y errores JSON uniformes.
-- Batería versionada de regresión: 107/107 comprobaciones; `check` y `build` correctos.
-- Prueba real posterior a las correcciones: login, sesión y los cuatro recursos `200`; logout `204`; reutilización de sesión `401`. Solo se creó y revocó la sesión de esa prueba, sin eliminar historial ni registrar secretos.
-- Compilación y validación de tipos exitosas.
+- Monorepo npm: React + Vite + TypeScript, Express + TypeScript y Supabase.
+- React Router con /login y rutas privadas /dashboard, /kardex, /horario, /recursos.
+- Contexto de autenticación, login/logout, cliente HTTP con cookies y layout de navegación.
+- Backend institucional con JWT cifrado, sesión UUID en app_sessions, cookie httpOnly, expiración fija configurable de ocho horas, revocación y validación de origen.
+- Perfil con name, Kardex, parciales y horario reales de SII mediante DTO; sin llamadas frontend a SII.
+- Dashboard con perfil/gráficas/Top 5, Kardex con búsqueda/ordenamiento y carga académica con agenda/tarjetas de parciales.
+- Centro de Préstamos: catálogo, reservas, cancelación, entrega, devolución, creación de recursos y ajuste de stock; utiliza resources y loans.
+- Despliegue Render realizado por Rebo y funcionamiento reportado por Emilio.
+- Verificación actual: check correcto con cuatro advertencias de lint; build correcto con advertencia de bundle grande; 107/107 regresiones institucionales. Esa batería no cubre autorización ni concurrencia del nuevo extra.
 
 ### Enrutamiento base del Frontend (`frontend/src/App.tsx`)
-1. **Problema que resuelve:** Permite la navegación en la SPA de React sin recargar la página, preparando el terreno para proteger rutas.
-2. **Por qué existe:** Para separar las pantallas públicas (Login) de las privadas (Dashboard, Kardex, etc.).
-3. **Entradas y salidas:** Recibe la URL actual del navegador y renderiza el componente correspondiente. Redirige cualquier ruta desconocida a `/login`.
-4. **Conexiones:** Reemplaza la plantilla inicial de Vite. Es el componente raíz envuelto por `main.tsx`.
-5. **Pendiente y consumidor futuro:** Rebo implementará la protección de rutas con el contexto de sesión en los próximos pasos y diseñará las pantallas reales.
+
+1. **Problema:** navegación SPA entre login y el producto.
+2. **Motivo:** centraliza composición de proveedor, rutas y layout.
+3. **Entrada/salida:** BrowserRouter resuelve /login y las privadas /dashboard, /kardex, /horario y /recursos. URLs desconocidas redirigen a /login; no existe /calificaciones independiente.
+4. **Conexiones:** main.tsx monta App en StrictMode; AuthProvider envuelve el router; ProtectedRoute y Layout envuelven las páginas privadas.
+5. **Estado/límites:** implementado. Protege la vista, no autoriza APIs del servidor. La regla concreta de Render para abrir rutas SPA directamente no se comprobó aquí.
 
 ### Capa de Servicios API - Autenticación (`frontend/src/services/auth.ts`)
-1. **Problema que resuelve:** Centraliza la comunicación con el backend para los flujos de login y verificación de sesión, evitando repetir código fetch en los componentes.
-2. **Por qué existe:** Para garantizar que todas las peticiones de autenticación incluyan estrictamente la configuración `credentials: 'include'`, vital para el manejo de cookies HTTP-only.
-3. **Entradas y salidas:** `login` recibe credenciales y devuelve datos del usuario o lanza un error. `checkSession` no recibe argumentos, verifica la validez de la cookie en el backend y devuelve el estado de la sesión.
-4. **Conexiones:** Se comunica directamente con los endpoints `POST /auth/login` y `GET /auth/session` del backend.
-5. **Pendiente y consumidor futuro:** Será consumido por el contexto global de sesión y la pantalla de Login que construirá Rebo en los siguientes pasos.
+
+1. **Problema:** concentra comunicación HTTP de sesión.
+2. **Motivo:** separa fetch de componentes y envía credentials: 'include'.
+3. **Entrada/salida:** API_URL usa VITE_API_URL o http://localhost:3000. login(email,password) devuelve { authenticated: true }; checkSession() consulta /auth/session; logout() hace POST /auth/logout sin esperar cuerpo. Ante fallo lanza Error; login interpreta message.
+4. **Conexiones:** Login y AuthContext consumen el servicio; React no recibe JWT ni almacena credenciales en localStorage.
+5. **Estado/límites:** conectado. No es un interceptor global de 401 de todos los servicios; FRONTEND_ORIGIN debe coincidir con la URL de React.
 
 ### Contexto Global de Autenticación (`frontend/src/context/AuthContext.tsx`)
-1. **Problema que resuelve:** Mantiene el estado de la sesión (`isAuthenticated`, `isLoading`) accesible para cualquier componente de la aplicación sin tener que pasar props (prop drilling).
-2. **Por qué existe:** Para que la UI reaccione globalmente a cambios de sesión y valide el acceso en el primer renderizado llamando al backend.
-3. **Entradas y salidas:** Provee un proveedor (`AuthProvider`) que envuelve la app y un hook (`useAuth`) para consumir los estados y la función `checkAuth`.
-4. **Conexiones:** Consume `authService.checkSession()` para confirmar el acceso real contra el backend de Emilio usando la cookie `httpOnly`.
-5. **Pendiente y consumidor futuro:** Será consumido por `ProtectedRoute` y, en el siguiente paso, por el formulario de Login para actualizar el estado tras iniciar sesión.
+
+1. **Problema:** comparte isAuthenticated/isLoading.
+2. **Motivo:** AuthProvider concentra sesión visual y useAuth exige estar dentro del proveedor.
+3. **Entrada/salida:** checkAuth activa carga, consulta checkSession y actualiza estado, capturando errores sin propagarlos; logout llama al servidor y siempre pone isAuthenticated=false. Un useEffect comprueba sesión al montar.
+4. **Conexiones:** Login llama checkAuth; ProtectedRoute consume estados y Layout usa logout.
+5. **Estado/límites:** implementado con advertencias de lint. No hay comprobación periódica ni invalidación automática desde un 401 de cualquier servicio; una sesión vencida con la app abierta puede quedar como error de datos. Cierre visual no prueba revocación remota si la red falló.
 
 ### Protección de Rutas (`frontend/src/components/ProtectedRoute.tsx`)
-1. **Problema que resuelve:** Impide el acceso visual a rutas académicas si el usuario no cuenta con una cookie de sesión validada por el backend.
-2. **Por qué existe:** Para cumplir el requerimiento de redirigir al login al perder la sesión o intentar entrar directamente mediante URL.
-3. **Entradas y salidas:** Renderiza a sus rutas hijas (`<Outlet />`) si hay sesión. Retorna `<Navigate to="/login" />` si el usuario no está autenticado, o un mensaje de carga mientras verifica.
-4. **Conexiones:** Consume el hook `useAuth` del `AuthContext`. Se implementa en `App.tsx` usando las rutas anidadas de React Router.
-5. **Pendiente y consumidor futuro:** Actualmente protege el Dashboard. Rebo lo usará para proteger Kardex, Calificaciones y Horario.
+
+1. **Problema:** evita mostrar vistas privadas sin sesión confirmada.
+2. **Motivo:** reutiliza una barrera visual.
+3. **Entrada/salida:** muestra “Verificando sesión...” durante carga, Navigate a /login sin autenticación y Outlet con sesión.
+4. **Conexiones:** useAuth y el árbol privado de App.
+5. **Estado/límites:** ya cubre dashboard, Kardex, horario y recursos; no sustituye sesión/roles en rutas HTTP.
 
 ### Interfaz de Login (`frontend/src/pages/Login/`)
-1. **Problema que resuelve:** Proporciona la interfaz visual segura (sin exponer JWT en local storage) para que los alumnos ingresen sus credenciales.
-2. **Por qué existe:** Para fusionar la identidad institucional (logos) con una UI moderna de pantalla dividida (split-screen), adaptándose a móviles y escritorio.
-3. **Entradas y salidas:** Recibe credenciales del usuario, muestra estados de carga/error, y tras un éxito, actualiza el `AuthContext` y redirige a `/dashboard`.
-4. **Conexiones:** Consume `authService.login()` y `useAuth().checkAuth()`. Utiliza CSS Modules puros para estilos encapsulados.
-5. **Pendiente y consumidor futuro:** Servirá como la puerta de entrada exclusiva a la app. Emilio no necesita intervenir aquí ya que consume el endpoint `POST /auth/login` directamente.
+
+1. **Problema:** acceso visual mediante correo y contraseña.
+2. **Motivo:** Login.tsx separa formulario de servicios y Login.module.css encapsula estilos.
+3. **Entrada/salida:** email/password/error/isLoading son los estados. El formulario usa type=email, required y bloqueo durante envío; handleSubmit llama login, checkAuth y navega a /dashboard, mostrando errores.
+4. **Conexiones:** authService, AuthContext y React Router; logos desde public.
+5. **Estado/límites:** implementado. checkAuth captura errores, de modo que el acceso final lo decide ProtectedRoute; no se realizaron nuevos logins reales en esta revisión documental.
 
 ### Layout Principal y Navegación (`frontend/src/components/Layout/`)
-1. **Problema que resuelve:** Proporciona un marco visual (cascarón) que se repite en todas las pantallas protegidas (Dashboard, Kardex, Horario), manteniendo la navegación constante sin recargar la página.
-2. **Por qué existe:** Para organizar la interfaz con una barra lateral (Sidebar) oscura que contiene las opciones del menú y el botón de cierre de sesión, separándola del área principal de contenido.
-3. **Entradas y salidas:** Renderiza a sus rutas hijas (`<Outlet />`) en el contenedor derecho. El botón de logout revoca la sesión y redirige al login.
-4. **Conexiones:** En `App.tsx` envuelve a las rutas privadas. Consume la función `logout` de `AuthContext` y utiliza `lucide-react` para la iconografía.
-5. **Pendiente y consumidor futuro:** Servirá como base visual y estructural para el Dashboard, Kardex y Horario que Rebo construirá en los próximos pasos.
+
+1. **Problema:** navegación persistente entre páginas.
+2. **Motivo:** Layout.tsx concentra sidebar/Outlet y Layout.module.css estilos.
+3. **Entrada/salida:** NavLink ofrece Panel, Kardex, Horario y Recursos; handleLogout llama al contexto y navega al login incluso ante error.
+4. **Conexiones:** React Router, AuthContext y lucide-react.
+5. **Estado/límites:** utilizado por todas las páginas privadas. No se certificó visualmente cada tamaño de pantalla en navegador.
 
 ### Servicio de Perfil Estudiantil (`frontend/src/services/student.ts`)
-1. **Problema que resuelve:** Conecta el frontend con el endpoint protegido de perfil del backend.
-2. **Por qué existe:** Para aislar la lógica de *fetch* y el tipado de los datos académicos del componente visual.
-3. **Entradas y salidas:** Llama a `GET /student/profile` y devuelve un objeto tipado `StudentProfile`. Si el backend responde `401`, lanza un error específico.
-4. **Conexiones:** Utiliza `credentials: 'include'` para enviar la cookie. Será consumido por el Dashboard para mostrar los indicadores de avance.
-5. **Pendiente y consumidor futuro:** El Dashboard que Rebo está a punto de crear lo utilizará para inyectar nombre, foto y promedios.
+
+1. **Problema:** obtiene el perfil normalizado.
+2. **Motivo:** separa HTTP y tipo StudentProfile de vistas.
+3. **Entrada/salida:** getStudentProfile consulta /student/profile con cookie y devuelve data.profile; 401 lanza “No autorizado”. El tipo incluye name, controlNumber, email, semester, photoUrl y métricas.
+4. **Conexiones:** Dashboard y Resources lo consumen; URL desde VITE_API_URL o localhost:3000.
+5. **Estado/límites:** conectado. TypeScript no valida el JSON en ejecución y el servicio no limpia por sí mismo AuthContext ante 401.
 
 ### Panel Principal (Dashboard) (`frontend/src/pages/Dashboard/`)
-1. **Problema que resuelve:** Ofrece un resumen visual inmediato del estado académico del estudiante (créditos, promedios, materias aprobadas/reprobadas y un Top 5 de mejores materias).
-2. **Por qué existe:** Para cumplir el requerimiento de un dashboard personalizado con indicadores visuales y colores de desempeño, mejorando la experiencia de usuario.
-3. **Entradas y salidas:** Consume los datos de perfil y kardex. Renderiza tarjetas informativas y gráficas interactivas mediante la librería `recharts`. Los colores del promedio son dinámicos según la calificación.
-4. **Conexiones:** Se renderiza dentro del componente `Layout` en la ruta `/dashboard`. Llama simultáneamente a los servicios `getStudentProfile` y `getStudentKardex`.
-5. **Pendiente y consumidor futuro:** La vista principal está terminada. Rebo pasará a construir las pantallas detalladas de Kardex y Horario en los siguientes pasos.
+
+1. **Problema:** resumen del estado académico.
+2. **Motivo:** Dashboard.tsx representa datos y Dashboard.module.css estilos.
+3. **Entrada/salida:** carga perfil/Kardex en paralelo y maneja loading/error. getPhotoSrc acepta data:image o agrega prefijo JPEG Base64. Muestra nombre/foto/semestre/correo/avance, promedio aritmético con dos decimales, gráficas Recharts de créditos/materias y Top 5 de notas numéricas del historial.
+4. **Conexiones:** student.ts, kardex.ts, Layout, lucide-react y Recharts.
+5. **Estado/límites:** implementado. totalCredits=260 es fijo y no procede del plan SII; contadores/créditos ausentes se sustituyen por cero. Son hipótesis visuales que no deben presentarse como datos institucionales universales.
 
 ### Servicio de Kardex (`frontend/src/services/kardex.ts`)
-1. **Problema que resuelve:** Conecta el frontend con el endpoint protegido de Kardex y adapta el tipado de los datos a la interfaz.
-2. **Por qué existe:** Para aislar la obtención de datos y asegurar que el frontend procese correctamente la estructura anidada (`{ kardex: { subjects } }`) y los valores `null` enviados por el DTO del backend.
-3. **Entradas y salidas:** Ejecuta `GET /student/kardex` y devuelve únicamente el arreglo `KardexSubject[]` para facilitar la iteración en React.
-4. **Conexiones:** Usa `credentials: 'include'` para la sesión. Actualmente es consumido por el Dashboard para extraer el Top 5 de materias.
-5. **Pendiente y consumidor futuro:** Rebo lo reutilizará como fuente de datos principal para la vista completa del historial académico en la próxima tarea (`feature/kardex-ui`).
+
+1. **Problema:** obtiene el historial.
+2. **Motivo:** separa fetch y tipos de las vistas.
+3. **Entrada/salida:** getStudentKardex consulta /student/kardex con cookie y devuelve solo kardex.subjects, no el avance.
+4. **Conexiones:** Dashboard y Kardex.
+5. **Estado/límites:** conectado. El tipo frontend semester es string|null, pero el DTO backend devuelve número; el cast del JSON no corrige esa diferencia.
 
 ### Pantalla de Historial Académico (Kardex) (`frontend/src/pages/Kardex/`)
-1. **Problema que resuelve:** Permite al estudiante consultar la totalidad de su historial académico, facilitando la localización de materias específicas mediante un buscador y ordenamiento dinámico.
-2. **Por qué existe:** Para cumplir con el requerimiento de mostrar los resultados finales institucionales (Kardex) en una interfaz moderna y responsiva, prescindiendo de las pestañas redundantes del diseño original del SII.
-3. **Entradas y salidas:** Consume el servicio `getStudentKardex()`. Genera una tabla con búsqueda en tiempo real y ordenamiento ascendente/descendente (por columna) gestionados 100% en el cliente mediante `useMemo` para máxima optimización.
-4. **Conexiones:** Se renderiza dentro del componente `Layout` en la ruta `/kardex`. Utiliza el tipado `KardexSubject` y renderiza las calificaciones con *badges* de color.
-5. **Pendiente y consumidor futuro:** La vista de Kardex está completa. El siguiente paso de Rebo será construir la interfaz para el Horario (`feature/schedule-ui`).
+
+1. **Problema:** presenta finales institucionales por materia/período.
+2. **Motivo:** Kardex.tsx concentra filtros/orden y su CSS Module la tabla.
+3. **Entrada/salida:** kardex/loading/error/searchTerm/sortConfig controlan la vista. useMemo filtra por nombre o período y ordena name, semester, credits y grade; para ordenar notas null usa -1. Badges: >=85 verde, >=70 amarillo, menor rojo; AC conserva etiqueta.
+4. **Conexiones:** getStudentKardex, Layout y /kardex.
+5. **Estado/límites:** implementado con carga/error/vacío, sin recalcular finales ni eliminar intentos. Su buscador no sustituye un filtro en los parciales actuales.
 
 ### Pantalla de Horario / Carga Académica (`frontend/src/pages/Schedule/`)
-1. **Problema que resuelve:** Presenta la distribución de clases en la semana y el avance de calificaciones parciales por materia. Resuelve el problema de tablas gigantes del diseño original haciéndolo totalmente responsivo.
-2. **Por qué existe:** Para cumplir el requerimiento de visualizar materias inscritas y parciales, sustituyendo la tabla de 10 columnas por tarjetas y una vista de columnas por día (Agenda).
-3. **Entradas y salidas:** Consume simultáneamente `getStudentSchedule` y `getStudentGrades`[cite: 8, 9]. Cruza ambas estructuras mediante `groupId`[cite: 8, 9] para inyectar los arrays de `assessments`[cite: 9] dentro de la tarjeta de la materia.
-4. **Conexiones:** Se renderiza en `/schedule`. Utiliza sistema de pestañas para alternar dos visualizaciones sin hacer re-fetching.
-5. **Pendiente y consumidor futuro:** Con esto cerramos las pantallas académicas principales. El siguiente paso es crear la rama para la funcionalidad extra de la biblioteca.
+
+1. **Problema:** agenda y parciales del período actual.
+2. **Motivo:** Schedule.tsx alterna agenda/tarjetas en /horario; Schedule.module.css da presentación.
+3. **Entrada/salida:** carga horario/calificaciones en paralelo; activeTab cambia vista sin nuevas consultas. agendaByDay agrupa/ordena por startTime; tarjetas relacionan por groupId y muestran C1, C2, etc., sin calcular final.
+4. **Conexiones:** getStudentSchedule, getStudentGrades, Layout y lucide-react. DAYS_MAP incluye lunes-sábado.
+5. **Estado/límites:** la agenda solo crea/renderiza días 1-5 y omite sábado; las tarjetas sí pueden mostrarlo. No hay búsqueda/filtro de materias o períodos en esta vista. null aparece como “-” con estilo rojo, no neutral, y no hay mensaje específico cuando todas las notas están pendientes. El tipo frontend classroom es string, pero backend admite null.
+
+### Servicios de parciales y horario (frontend/src/services/grades.ts y schedule.ts)
+
+1. **Problema:** obtienen notas y sesiones para Carga Académica.
+2. **Motivo:** separan fetch y tipos Assessment/GradeSubject/Session/ScheduleSubject.
+3. **Entrada/salida:** consultan /student/grades y /student/schedule con cookies; retornan periods[0]?.subjects || [] de cada respuesta. Lanza Error ante HTTP no exitoso.
+4. **Conexiones:** Schedule cruza las listas por groupId.
+5. **Estado/límites:** solo exponen el primer período; se pierden sus metadatos y otros períodos. No incluyen filtro por período ni tratamiento global de 401.
 
 ## Funcionalidad EXTRA 
 
-### Módulo de Préstamo de Recursos (Backend)
-1. **Problema que resuelve:** Gestiona la lógica transaccional de apartados de biblioteca y laboratorios, asegurando la integridad del inventario escolar.
-2. **Tablas implementadas (Supabase):** `resources` (catálogo y control de stock) y `loans` (registro histórico y estados de préstamo).
-3. **Lógica de Negocio Principal (Express):** 
-   - `POST /resources/reserve/:id`: Verifica el `available_stock`. Si es mayor a 0, aparta el recurso restando 1 al stock y genera el registro en `loans` con estado `pending_pickup` y vencimiento a 3 días.
-   - `GET /resources/loans/:studentId`: Cruza la información de préstamos con el catálogo (JOIN) para devolver el historial completo del alumno.
-   - `POST /resources/loans/:id/cancel`: Permite cancelar una reserva en estado `pending_pickup`, ejecutando un rollback que suma `+1` al stock disponible del recurso.
-4. **Manejo de Fallos:** Si la inserción inicial de un préstamo falla, el servicio ejecuta un rollback manual que restaura el `available_stock` en Supabase para evitar discrepancias.
+### Centro de Préstamos: alcance real
 
-### Catálogo de Recursos (Frontend - Vista Estudiante) (`frontend/src/pages/Resources/`)
-1. **Problema que resuelve:** Permite al alumno explorar el inventario de la institución (libros, equipo, cubículos), apartarlos y gestionar sus reservas sin tener que acudir físicamente.
-2. **Por qué existe:** Para cumplir el requerimiento del profesor de diseñar una funcionalidad adicional que aporte valor real, separando la vista pública de un futuro backend administrativo.
-3. **Entradas y salidas:** 
-   - Consume `GET /resources` para pintar el catálogo. 
-   - Extrae el número de control del alumno mediante `getStudentProfile()` y lo envía a `POST /resources/reserve/:id`. Al tener éxito, el stock de la tarjeta se actualiza localmente para dar retroalimentación visual inmediata.
-4. **Gestión de Préstamos:** Implementa un sistema de pestañas que incluye la vista "Mis Préstamos". Esta sección renderiza el estado actual de cada artículo reservado y habilita un botón condicional para "Cancelar Reserva" si el artículo aún no ha sido recogido, el cual actualiza el inventario en tiempo real.
+La función elegida ofrece catálogo de libros/equipo/espacios, reservas, recogida, devolución y administración de inventario propio. Rebo implementó interfaz y módulo Express. SII sigue siendo fuente exclusiva de autenticación y datos académicos; el catálogo no equivale a inventario oficial del instituto. Funcionalidad implementada no significa permisos/integridad ya asegurados.
 
-### Panel de Administración de Recursos (Backend y Frontend)
-1. **Problema que resuelve:** Otorga al personal de la institución (ventanilla/laboratorio) las herramientas para gestionar el ciclo de vida real de los préstamos y administrar el catálogo maestro de recursos, sin interferir con la tabla de usuarios de los alumnos.
-2. **Estrategia de Seguridad ("God User"):** Para no modificar la base de datos de autenticación original de la escuela, el sistema identifica al administrador comparando el número de control del usuario activo contra la variable de entorno `VITE_ADMIN_CONTROL_NUMBER`. Si coincide, el frontend oculta la vista de estudiante y despliega el panel de control.
-3. **Gestión de Préstamos (Flujo de Ventanilla):**
-   - El administrador visualiza una tabla global con todas las reservas de la escuela (`GET /resources/admin/loans`).
-   - Cuando el alumno recoge el equipo, el admin ejecuta `POST /resources/admin/loans/:id/activate`, cambiando el estado a `active`.
-   - Cuando el alumno devuelve el equipo, ejecuta `POST /resources/admin/loans/:id/return`. Esto cambia el estado a `returned` y automáticamente devuelve `+1` al stock del inventario.
-4. **Gestión de Catálogo (Inventario):**
-   - **Creación:** A través de un formulario modal, el admin consume `POST /resources/admin/catalog` para registrar nuevo equipo. El frontend actualiza la vista inmediatamente agregando la tarjeta sin recargar la página.
-   - **Ajuste de Stock:** Los botones dinámicos en las tarjetas consumen `PATCH /resources/admin/catalog/:id/stock` enviando deltas de `+1` o `-1`. El backend cuenta con una validación estricta que impide reducir el inventario si el artículo se encuentra prestado (stock disponible < 0).
+### backend/src/modules/resources/resources.routes.ts
 
-### Pendiente
+1. **Problema:** registra el API de recursos y préstamos.
+2. **Motivo:** agrupa el dominio bajo /resources.
+3. **Entrada/salida:** delega los endpoints siguientes. Ninguno aplica requireAuthenticatedSession ni comprobación de rol en servidor.
+4. **Conexiones:** app.ts monta resourcesRouter; llama a resources.controller.ts. La protección global de origen en mutaciones no sustituye autorización.
+5. **Estado/riesgo:** prueba HTTP aislada con base ficticia: GET /resources/admin/loans devolvió 200 sin cookie, frente a 401 de /student/profile. No se leyeron datos reales ni se realizaron mutaciones.
 
-- Rutas y componentes de interfaz.
-- Implementar en la interfaz el criterio acordado de parciales actuales y finales históricos, distinguiendo notas ausentes de cero.
-- Dashboard y pantallas frontend.
-- Seleccionar y justificar la funcionalidad adicional de impacto; el planificador es solo una propuesta por ahora.
-- Pruebas, despliegue en Render y documentación visual.
+| Método/ruta | Controlador | Entrada/resultado |
+|---|---|---|
+| GET /resources | getAllResources | Lista de catálogo |
+| POST /resources/reserve/:id | createReservation | resourceId y studentId en body; { message, loan } |
+| GET /resources/loans/:studentId | getMyLoans | Historial del ID recibido |
+| POST /resources/loans/:id/cancel | cancelMyReservation | loanId y studentId del body; mensaje |
+| GET /resources/admin/loans | getAdminLoans | Todos los préstamos |
+| POST /resources/admin/loans/:id/activate | activateResource | Mensaje de entrega |
+| POST /resources/admin/loans/:id/return | returnResource | Mensaje de devolución |
+| POST /resources/admin/catalog | createResourceCtrl | Recurso creado |
+| PATCH /resources/admin/catalog/:id/stock | adjustStockCtrl | delta; recurso actualizado |
+
+### backend/src/modules/resources/resources.controller.ts
+
+1. **Problema:** adapta HTTP a operaciones del servicio.
+2. **Motivo:** separa req/res de Supabase.
+3. **Entrada/salida:** los nueve controladores leen params/body. createReservation acepta studentId del cliente y usa ALUMNO_MOCK_123 si falta; getMyLoans usa el ID de ruta; cancelMyReservation usa el ID del body; adjustStockCtrl aplica Number(delta). Devuelven resultados o { error: error.message } con 400/500, distinto del { message } institucional.
+4. **Conexiones:** resources.service.ts; no obtiene identidad de la sesión ni valida cuerpos con Zod.
+5. **Estado/riesgo:** falta enlazar identidad, propiedad y rol al backend; retirar el fallback ficticio y validar cuerpos/deltas. No confiar en el formulario ni ocultar botones como control de acceso. Algunos mensajes de base pueden propagarse.
+
+### backend/src/modules/resources/resources.service.ts
+
+1. **Problema:** persiste catálogo y ciclo de préstamo.
+2. **Motivo:** reúne reglas fuera de controladores.
+3. **Entradas/salidas y lógica:**
+
+| Función | Entrada | Efecto/resultado |
+|---|---|---|
+| getAvailableResources | Ninguna | resources ordenado por category |
+| reserveResource | studentId, resourceId | Exige available_stock>0, resta uno e inserta loan pending_pickup con vencimiento a tres días desde reserva; mensaje/loan |
+| getStudentLoans | studentId | loans filtrado por alumno, relación resources y created_at descendente |
+| cancelReservation | loanId, studentId | Exige ambos IDs y pending_pickup; cambia a cancelled y suma uno al stock |
+| getAllLoansForAdmin | Ninguna | Todos los loans con nombre/categoría del recurso |
+| markLoanAsActive | loanId | Exige pending_pickup, cambia a active; no reinicia due_date |
+| markLoanAsReturned | loanId | Solo rechaza returned; cambia a returned y suma stock. No exige active/overdue |
+| createNewResource | Datos de catálogo | Crea recurso con available_stock=total_stock y devuelve fila |
+| adjustResourceStock | resourceId, delta | Suma delta a total/disponible, rechaza negativos y devuelve fila actualizada |
+
+4. **Conexiones/datos:** usa supabase.ts. resources utiliza id/name/description/category/total_stock/available_stock/image_url; loans utiliza id/student_id/resource_id/status/borrow_date/due_date/created_at y su relación resources. Esta revisión no inspeccionó DDL, constraints, RLS ni permisos reales de esas tablas.
+5. **Estado/límites:** son peticiones independientes, no una transacción SQL. La compensación manual al fallar la reserva puede fallar o sobrescribir cambios concurrentes. Cancelar/devolver modifica inventario por separado y no comprueba todos los errores. No se observó automatización que genere overdue ni venza reservas automáticamente. Puede haber pérdidas de actualización con peticiones concurrentes.
+
+### frontend/src/services/resources.ts
+
+1. **Problema:** conecta la vista con los nueve endpoints propios.
+2. **Motivo:** concentra fetch y tipos Resource/Loan.
+3. **Entrada/salida:** getResources/getMyLoans/getAdminLoans devuelven listas; reserveResource/cancelReservation reciben IDs y studentId; markAsActive/markAsReturned reciben loanId; createAdminResource recibe formulario y devuelve Resource; adjustResourceStock recibe id/delta y devuelve Resource. Todas envían cookie; cuerpos usan JSON.
+4. **Conexiones:** Resources.tsx y API /resources; errores interpretados desde errorData.error. Loan admite pending_pickup, active, returned, overdue, cancelled.
+5. **Estado/límites:** implementado; enviar cookies no protege una API que no las valida.
+
+### frontend/src/pages/Resources/Resources.tsx y Resources.module.css
+
+1. **Problema:** catálogo/Mis Préstamos para alumno y Préstamos Globales/Inventario para la variante administrativa.
+2. **Motivo:** concentra presentación/acciones del extra y estilos.
+3. **Entrada/salida:** initData obtiene perfil/controlNumber y lo compara con VITE_ADMIN_CONTROL_NUMBER; carga listas según isAdmin. resources/myLoans/adminLoans guardan datos; studentId/isAdmin la variante; activeTab/adminTab las pestañas; loading/error/message/reservingId el estado visual; isModalOpen/formData controlan alta de recurso.
+4. **Conexiones/funciones:** handleReserve reserva y actualiza stock/historial; handleCancel confirma y recarga listas; handleActivate entrega; handleReturn confirma devolución y recarga; handleStockChange reemplaza recurso; handleCreateResource agrega fila y reinicia modal. showMsg dura cinco segundos y getStatusLabel traduce estados. El formulario recibe nombre, descripción, categoría, stock e imagen.
+5. **Estado/riesgo:** implementado. La comparación VITE_ADMIN_CONTROL_NUMBER controla solo visibilidad; VITE_* es público y no se considera autorización. Los controles HTML no validan el backend.
+
+### Hallazgos vigentes y alcance
+
+- **Prioridad alta:** proteger rutas de recursos/admin con sesión y rol en servidor; derivar alumno de sesión; retirar el ID ficticio. La comprobación de origen no reemplaza esto. Solo se documentó; no se corrigió código.
+- **Inventario:** validar cuerpos/delta y resolver atomicidad, concurrencia, errores de compensación y transiciones de estado.
+- **Interfaz académica:** falta filtro/búsqueda de parciales por materia/período, la agenda omite sábado y null recibe estilo rojo; no hay invalidación global del contexto ante 401. También existen diferencias de tipos y la hipótesis fija de 260 créditos.
+- **Evidencia:** Render fue reportado por Emilio; sin URLs/configuración no se certificó producción. No se consultó catálogo/préstamos reales ni se probó visualmente todo el responsive. Las 107 regresiones cubren backend institucional, no permisos/inventario del extra.
+- **Pospuesto explícitamente:** SQL reproducible y límite de intentos; son mejoras diferidas, no nuevas tareas obligatorias ni autorizadas en esta revisión.
+- README/capturas y exposición son entregables cuya evidencia no se comprobó aquí; no se inventan capturas ni se declaran terminados por compilar.
 
 ## Arquitectura
 
@@ -173,7 +228,7 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 | Emilio | Backend institucional completo, sesiones/cifrado/Supabase, DTO/contratos, seguridad y pruebas API, despliegue backend, documentación y exposición de su parte. Apoya la función extra y revisa su integración. |
 | Rebo | Frontend completo, incluidos login, dashboard, Kardex, calificaciones, horario, navegación, responsive, pruebas y despliegue frontend. Lidera la función adicional con su interfaz, lógica, persistencia y módulo backend necesarios, con apoyo de Emilio; documenta y expone su parte. |
 
-Este acuerdo sustituye el reparto inicial por módulos mixtos. Dashboard y Kardex React pertenecen a Rebo. Ambos seleccionan y justifican la función extra, coordinan contratos y participan en la demostración. Rebo acuerda con Emilio los cambios backend de la función extra sin alterar unilateralmente los módulos institucionales o de sesiones.
+Este acuerdo sustituye el reparto inicial por módulos mixtos. Rebo implementó todo el frontend y el Centro de Préstamos; también realizó el despliegue según Emilio. Ambos coordinan contratos, revisión y demostración. Los cambios del extra sobre autenticación y módulos institucionales requieren coordinación.
 
 ```text
 Navegador
@@ -234,7 +289,8 @@ La tabla tiene RLS habilitado. Los roles `anon` y `authenticated` no tienen perm
 │   │   └── modules/
 │   │       ├── auth/            # Sesión, cifrado, controladores y middleware
 │   │       ├── sii/             # Cliente exclusivo de SII ITC
-│   │       └── student/         # Endpoints académicos protegidos
+│   │       ├── student/         # Endpoints académicos protegidos
+│   │       └── resources/       # Catálogo, préstamos e inventario propios
 │   ├── .env.example           # Plantilla sin secretos
 │   ├── tests/backend.regression.mjs # HTTP real local con dependencias aisladas
 │   ├── package.json
@@ -250,25 +306,13 @@ La tabla tiene RLS habilitado. Los roles `anon` y `authenticated` no tienen perm
 
 ## Frontend
 
-### Tecnología
+### Tecnología y estructura actual
 
-- React
-- Vite
-- TypeScript
+React + Vite + TypeScript, React Router, lucide-react, Recharts y CSS Modules. main.tsx monta App con StrictMode; index.css define tipografía, tema claro y contenedores. vite.config.ts habilita el plugin React sin proxy del API.
 
-El frontend es una SPA. Por ahora contiene la plantilla inicial de Vite; aún no incluye rutas, autenticación, llamadas al backend ni pantallas del producto.
+Las fichas de servicios/páginas anteriores describen el frontend funcional y no se duplican aquí. API_URL usa VITE_API_URL o http://localhost:3000; las solicitudes usan credentials: 'include' y ninguna llama directamente a SII en el código revisado.
 
-### Responsabilidad
-
-Rebo es responsable de todo el frontend: login, dashboard, calificaciones, Kardex, horario y la interfaz de la funcionalidad adicional que el equipo elija. Solo consumirá endpoints del backend propio. Cuando se implementen llamadas autenticadas, deberán incluir credenciales para que el navegador envíe la cookie de sesión:
-
-```ts
-fetch('http://localhost:3000/endpoint', {
-  credentials: 'include',
-});
-```
-
-La URL final deberá provenir de una variable pública de Vite, nunca de una URL institucional ni de una llave secreta.
+Después de pull que cambie dependencias ejecutar npm install desde la raíz. react-router-dom, recharts y lucide-react faltaban en el diagnóstico anterior y ahora están instaladas. Git no transporta node_modules ni la configuración privada de Render.
 
 ## Backend
 
@@ -280,7 +324,7 @@ La URL final deberá provenir de una variable pública de Vite, nunca de una URL
 - `cors`: política de origen cruzado.
 - `cookie-parser`: lectura de cookies enviadas al backend.
 - `dotenv`: carga de variables locales desde `.env`.
-- `zod`: validación de configuración y, posteriormente, de peticiones.
+- `zod`: validación de entorno, login, UUID y DTO institucionales; recursos aún no valida sus cuerpos mediante esquemas.
 - `@supabase/supabase-js`: cliente para acceder a Supabase desde el backend.
 - `tsx`: ejecución de TypeScript durante desarrollo.
 
@@ -290,14 +334,11 @@ Importa la aplicación Express y la inicia en el puerto configurado. El puerto s
 
 ### `backend/src/app.ts`
 
-Configura el comportamiento común del servidor:
-
-- `trust proxy` se establece en `1` para operar correctamente detrás del proxy de Render.
-- CORS permite únicamente `FRONTEND_ORIGIN` y habilita credenciales.
-- El cuerpo JSON se limita a `16kb`, suficiente para credenciales y peticiones normales, reduciendo peticiones excesivas.
-- `cookie-parser` permite inspeccionar la cookie de sesión en las rutas protegidas implementadas.
-- Monta `authRouter` bajo `/auth` y `studentRouter` bajo `/student`.
-- `GET /health` responde `200` con `{ "status": "ok" }`; sirve para validar que el backend está disponible localmente y en Render.
+1. **Problema:** compone el pipeline HTTP.
+2. **Motivo:** separa configuración Express del arranque.
+3. **Entrada/salida:** trust proxy=1; CORS con FRONTEND_ORIGIN normalizado y credenciales; requireTrustedMutationOrigin, JSON de 16 KB y cookieParser. Monta /auth, /student y /resources, salud pública, fallback JSON 404 y apiErrorHandler.
+4. **Conexiones:** los tres routers están importados aquí. Autenticación se aplica en rutas concretas, no se hereda al montar resourcesRouter.
+5. **Estado/límites:** backend local disponible. No se verificó desde Render el número real de proxies. Ver fichas de middleware para origen/errores y de recursos para la falta de sesión/roles.
 
 ### `backend/src/config/env.ts`
 
@@ -332,7 +373,7 @@ Este módulo define las opciones que `auth.controller.ts` aplica al emitir la co
 
 **Conexiones:** usa `isSessionId` de `session-id.ts` antes del repositorio, `session.repository.ts` para recuperar y tocar la sesión, `session-cookie.ts` para borrar la cookie con los mismos atributos y `env.ts` para conocer el nombre de cookie. Los controladores posteriores obtienen la sesión validada mediante `getAuthenticatedSession`.
 
-**Pendiente y consumidor futuro:** actualmente protege `GET /auth/session`, `GET /student/profile`, `GET /student/kardex`, `GET /student/grades` y `GET /student/schedule`. Se reutilizará en las rutas privadas de la funcionalidad adicional seleccionada.
+**Estado y consumidor:** actualmente protege `GET /auth/session`, `GET /student/profile`, `GET /student/kardex`, `GET /student/grades` y `GET /student/schedule`. El módulo resources aún no lo utiliza; esa integración es un hallazgo de autorización vigente.
 
 ### `backend/src/modules/auth/session-id.ts`
 
@@ -403,7 +444,7 @@ La función `getStudentKardex(siiToken): Promise<unknown>` aplica el mismo patr�
 
 `getStudentGrades(siiToken): Promise<unknown>` existe para consultar `GET /api/movil/estudiante/calificaciones` con Bearer interno y timeout. Recibe el JWT validado por la sesión y devuelve el JSON sin tipar al controlador, sin guardar notas en Supabase. Clasifica red/HTTP, sesión rechazada y JSON inválido igual que Kardex. Se conecta con `getGrades`, que aplica el DTO antes de responder; Rebo consume solo `/student/grades`. Las evaluaciones recibidas son los parciales del período actual; las finales registradas pertenecen a Kardex.
 
-`getStudentSchedule(siiToken): Promise<unknown>` consulta `GET /api/movil/estudiante/horarios` con JWT interno y timeout. Separa la comunicación institucional de la pantalla de horario. Devuelve el JSON al controlador `getSchedule`; no persiste el horario ni entrega tokens. Red/timeout y HTTP no exitosos generan `unavailable`, `401/403` generan `invalid_session` y JSON ilegible o `null` genera `invalid_response`. Rebo consumirá el DTO desde `/student/schedule`; Emilio confirmó su funcionamiento autenticado y se verificó por HTTP el rechazo sin cookie.
+`getStudentSchedule(siiToken): Promise<unknown>` consulta `GET /api/movil/estudiante/horarios` con JWT interno y timeout. Separa la comunicación institucional de la pantalla de horario. Devuelve el JSON al controlador `getSchedule`; no persiste el horario ni entrega tokens. Red/timeout y HTTP no exitosos generan `unavailable`, `401/403` generan `invalid_session` y JSON ilegible o `null` genera `invalid_response`. Schedule consume el DTO desde `/student/schedule`; Emilio confirmó su funcionamiento autenticado y se verificó por HTTP el rechazo sin cookie.
 
 ### `backend/src/modules/auth/authentication.service.ts`
 
@@ -427,7 +468,7 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 
 **Conexiones:** importa los controladores de `auth.controller.ts` y es montado desde `app.ts` mediante `app.use('/auth', authRouter)`.
 
-**Pendiente y consumidor futuro:** Rebo consumirá estas rutas desde la interfaz de login usando `credentials: 'include'`. Las cuatro rutas académicas ya reutilizan el middleware de sesión antes de consultar SII ITC.
+**Estado y consumidor:** Login y AuthContext ya consumen estas rutas con `credentials: 'include'`; las cuatro rutas académicas reutilizan el middleware de sesión.
 
 ### `backend/src/modules/auth/auth.controller.ts`
 
@@ -447,19 +488,7 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 
 **Conexiones:** `login` invoca `authenticateWithSii`, el cual usa `sii.client.ts` y `session.repository.ts`. `getSession` recibe una sesión ya validada por `authenticated-session.middleware.ts`; `logout` usa el repositorio para revocar. Las opciones de cookie provienen de `session-cookie.ts`; el nombre viene de `env.ts`.
 
-**Pendiente y consumidor futuro:** el frontend de Rebo utilizará estos endpoints desde su servicio de API. Falta conectar su formulario React; el login institucional y el middleware reutilizable ya se probaron localmente.
-
-### Montaje en `backend/src/app.ts`
-
-**Problema que resuelve:** evita respuestas `404` al hacer que Express conozca el router de autenticación.
-
-**Por qué existe:** importar un router no basta; `app.use('/auth', authRouter)` y `app.use('/student', studentRouter)` los incorporan al ciclo de solicitudes de Express. También se mantiene una sola ejecución de `cookieParser()`, suficiente para leer la cookie en todos los controladores.
-
-**Entradas y salidas:** recibe las solicitudes cuyo path inicia con `/auth` o `/student` y las delega al router correspondiente. No produce respuestas propias para esas rutas; cada controlador decide su respuesta.
-
-**Conexiones:** el orden es CORS, `requireTrustedMutationOrigin`, JSON limitado a 16 KB, `cookieParser`, routers y salud, fallback JSON `404`, y `apiErrorHandler` al final. La protección de mutaciones se aplica antes de parsear cuerpos o ejecutar acciones; los routers reciben cookies y JSON ya procesados.
-
-**Pendiente y consumidor futuro:** es la base de todos los clientes frontend y de las pruebas manuales de API. Los routers de autenticación y los cuatro recursos académicos ya están montados; el módulo de la función adicional se integrará cuando sea elegido y diseñado.
+**Estado y consumidor:** authService, Login y AuthContext ya consumen los endpoints. El login institucional y middleware tienen pruebas previas reales e institucionales aisladas; las nuevas rutas resources no heredan esa protección.
 
 ### `backend/src/middleware/request-origin.middleware.ts`
 
@@ -495,7 +524,7 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 
 **Conexiones:** importa el middleware de autenticación y los controladores `getProfile`, `getKardex`, `getGrades` y `getSchedule` desde `student.controller.ts`; `app.ts` lo monta bajo `/student`.
 
-**Pendiente y consumidor futuro:** Rebo consumirá perfil, Kardex, calificaciones y horario desde sus pantallas. Las cuatro rutas están registradas y rechazan solicitudes sin cookie; las pantallas siguen pendientes en la copia local revisada. Emilio mantiene los contratos y la integración backend.
+**Estado y consumidor:** Dashboard, Kardex y Schedule ya consumen los cuatro contratos institucionales protegidos. Emilio mantiene esa integración; la protección de resources se documenta aparte.
 
 ### `backend/src/modules/student/student.controller.ts`
 
@@ -515,7 +544,7 @@ En `getProfile`, la cookie se borra antes de intentar revocar una sesión instit
 
 `getSchedule(request, response): Promise<void>` obtiene la sesión, llama a `getStudentSchedule`, normaliza mediante `parseStudentSchedule` y envía una sola respuesta `200 { schedule: StudentSchedule }`. Maneja `ZodError` y JSON inválido con `502`, indisponibilidad con `503`, sesión institucional inválida con borrado de cookie y revocación seguida de `401` (o `500` si falla la revocación), y otros errores con `500`. Emilio eliminó una llamada duplicada a `.json()` que intentaba modificar una respuesta ya enviada; la revisión confirmó que queda un solo envío. Este error de ejecución no lo detectaba TypeScript.
 
-**Pendiente y consumidor futuro:** Rebo implementará las cuatro pantallas con estos contratos y Emilio mantendrá el backend. Calificaciones mostrará parciales disponibles del semestre en curso; Kardex, resultados finales institucionales por materia/período. La interfaz debe conservar esa diferencia y no construir una final propia.
+**Estado y consumidor:** las pantallas institucionales están conectadas. Schedule muestra parciales actuales y Kardex los resultados finales institucionales; los controladores no calculan una final propia. Mantener esa distinción al corregir las diferencias de UI señaladas arriba.
 
 ### `backend/src/modules/student/student-profile.dto.ts`
 
@@ -531,7 +560,7 @@ Después del cambio, una prueba real autorizada confirmó `200` en login/sesión
 
 **Conexiones:** lo invoca `student.controller.ts` inmediatamente después de `getStudentProfile`; no llama a la base de datos, no conoce cookies ni expone el JWT de SII.
 
-**Pendiente y consumidor futuro:** Rebo reutilizará las métricas y `profile.name` en el dashboard o encabezado, actualizando su tipo frontend y mostrando un texto neutral si el nombre es `null`. Emilio dará soporte al contrato. El nombre es un dato personal: no incluir valores reales en fixtures, logs ni capturas públicas sin anonimizar.
+**Estado y consumidor:** Dashboard ya usa `profile.name` y sus métricas; Resources usa controlNumber para su flujo actual. El tipo frontend está actualizado y el nombre ausente se muestra como Estudiante. El nombre es personal: no incluir valores reales en fixtures/logs/capturas públicas. Falta derivar la identidad de préstamos desde sesión en servidor, no del body.
 
 ### `backend/src/modules/student/student-kardex.dto.ts`
 
@@ -545,7 +574,7 @@ Después del cambio, una prueba real autorizada confirmó `200` en login/sesión
 
 **Conexiones:** `getKardex` lo invoca después de `getStudentKardex`; no accede a cookies, JWT ni Supabase. El JSON propio es `{ kardex: { progressPercentage, subjects } }`, sin `kardex.data` ni la envoltura `code/message/flag` institucional.
 
-**Pendiente y consumidor futuro:** Rebo usará este contrato para la pantalla estructurada del historial, con el resultado final institucional de cada registro de materia/período e intento. Debe mostrar `gradeLabel` y distinguir notas numéricas de textuales al colorear; no se asigna una equivalencia numérica a `AC`. La consulta autenticada normalizada final ya devolvió `200` en la prueba real posterior a las correcciones y el rechazo sin cookie también está comprobado.
+**Estado y consumidor:** Kardex y Dashboard ya usan este contrato para historial y Top 5, con el resultado final institucional de cada registro de materia/período e intento. Debe mostrar `gradeLabel` y distinguir notas numéricas de textuales al colorear; no se asigna una equivalencia numérica a `AC`. La consulta autenticada normalizada final ya devolvió `200` en la prueba real posterior a las correcciones y el rechazo sin cookie también está comprobado.
 
 **Validación de este conjunto:** `npm run check` pasó. Se ejecutó el DTO real contra el JSON adjunto sin guardar datos personales en el repositorio: conservó los 50 registros, códigos, períodos y créditos, y convirtió `AC` a etiqueta con número `null`. También se verificó el rechazo de envoltura inválida, `flag: false` y créditos vacíos, y la aceptación de un historial vacío. Emilio confirmó previamente `200` de la consulta institucional en Postman; esa prueba fue anterior a la normalización.
 
@@ -561,7 +590,7 @@ Después del cambio, una prueba real autorizada confirmó `200` en login/sesión
 
 **Conexiones:** lo usa `getGrades` después de `getStudentGrades`. El cliente React recibe `{ grades: { periods: [...] } }` y no conoce `data`, `calificaiones` ni tokens institucionales. No accede a Supabase ni persiste notas.
 
-**Pendiente y consumidor futuro:** Rebo usará este contrato para búsqueda/filtro por materia y período, carga, errores y notas por parcial. Mostrar “Pendiente” o `—` para un parcial con `gradeLabel: null`; si no hay notas capturadas en la materia, “Calificaciones aún no disponibles”. Conservar notas cero reales y etiquetas textuales. Según el criterio acordado a partir de la explicación y capturas de Emilio, Calificaciones muestra los parciales disponibles, no una lista etiquetada como final. Los resultados finales registrados se muestran desde Kardex. No se calcula una final propia con parciales ni se mezcla automáticamente el historial con las materias actuales. Los colores deben distinguir valores numéricos, notas pendientes y etiquetas.
+**Estado y consumidor:** Schedule ya usa este contrato para las tarjetas de parciales. Búsqueda/filtro por materia y período aún no existe en esa vista. Mostrar “Pendiente” o `—` para un parcial con `gradeLabel: null`; si no hay notas capturadas en la materia, “Calificaciones aún no disponibles”. Conservar notas cero reales y etiquetas textuales. Según el criterio acordado a partir de la explicación y capturas de Emilio, Calificaciones muestra los parciales disponibles, no una lista etiquetada como final. Los resultados finales registrados se muestran desde Kardex. No se calcula una final propia con parciales ni se mezcla automáticamente el historial con las materias actuales. Los colores deben distinguir valores numéricos, notas pendientes y etiquetas.
 
 **Criterio académico acordado:** Emilio explicó cuatro parciales independientes, aprobación de cada uno con 70 o más y regularización de los reprobados; el resultado final se conoce al cierre y se refleja en Kardex. Esta regla explica la UI, pero el backend no calcula aprobación, regularización ni promedios finales. El DTO conserva la cantidad de evaluaciones recibida; no impone cuatro como límite universal. El PDF solicita nota final; el equipo adopta la presentación institucional de parciales actuales y finales históricos en sus respectivas secciones, sin inventar resultados faltantes.
 
@@ -581,7 +610,7 @@ Después del cambio, una prueba real autorizada confirmó `200` en login/sesión
 
 **Conexiones:** lo invoca `getSchedule` tras consultar `getStudentSchedule`; no conoce cookies, JWT ni Supabase. El frontend recibe `{ schedule: { periods: [...] } }` y agrupa sesiones por día y hora para su agenda.
 
-**Pendiente y consumidor futuro:** Rebo implementará agenda, orden por hora, leyenda de días y estados de carga/error/vacío. No asumir ausencia de materia porque no tenga sesiones asignadas; el DTO no detecta ni resuelve traslapes. El contrato ya puede utilizarse después de integrar el PR de Emilio.
+**Estado y consumidor:** Schedule ya usa el DTO en agenda y tarjetas. El DTO conserva sábado y aulas null, aunque la agenda React actualmente omite sábado. No detecta traslapes; una materia sin sesiones sigue siendo válida.
 
 **Validaciones realizadas:** `npm run check` pasó. Se ejecutó el DTO con datos locales sintéticos que reproducen los bloques compartidos: cuatro materias y 12 sesiones, días correctos, horas separadas y omisión de días nulos. También se comprobó sábado, aula nula con sesión válida, materia sin sesiones, períodos vacíos y rechazo de horas fuera de rango, invertidas, iguales y formato inválido. Estas son pruebas aisladas del DTO, no respuestas simuladas para sustituir SII. Emilio compartió previamente el JSON institucional real; el agente no usó credenciales ni realizó una nueva consulta autenticada.
 
@@ -605,30 +634,41 @@ La llave de servidor puede evitar RLS, por lo que este cliente no puede llegar a
 
 **Resultado y prueba real complementaria:** 107/107 casos pasaron, además de `npm run check` y `npm run build`. Con autorización explícita se ejecutó por separado una prueba contra SII y Supabase reales: `/auth/login`, `/auth/session`, `/student/profile`, `/student/kardex`, `/student/grades` y `/student/schedule` devolvieron `200`; `/auth/logout` devolvió `204` y reutilizar esa cookie en `/auth/session` devolvió `401`. Se creó una nueva fila de sesión y se revocó al finalizar; no se borraron filas ni se alteraron datos académicos. Credenciales recibidas por entrada estándar con eco desactivado; solo se registraron rutas y estados, sin valores personales, token o cookie. El script puntual está fuera del repositorio; no contiene credenciales incrustadas.
 
-## Variables de entorno
+## Variables de entorno y ejecución
 
-Todas las variables reales se configuran en `backend/.env` local o en el panel de Render. Ese archivo no se debe confirmar. `backend/.env.example` solo contiene valores seguros de ejemplo.
+### Backend
 
-Para desarrollo compartido, ambos backends conectados a la misma tabla `app_sessions` necesitan la misma `SII_TOKEN_ENCRYPTION_KEY`; una llave distinta no puede descifrar las sesiones existentes. Compartir secretos por un canal privado seguro, no en Git ni documentos. Cada integrante usa sus propias credenciales institucionales para probar. La configuración local de Rebo no requiere regenerar la llave compartida.
+Los secretos se configuran en backend/.env local o en el entorno del servicio Render. No se versionan; backend/.env.example es la plantilla segura.
 
-| Variable | Uso | Valor local de ejemplo |
-|---|---|---|
-| `NODE_ENV` | Entorno de ejecución | `development` |
-| `PORT` | Puerto HTTP del backend | `3000` |
-| `FRONTEND_ORIGIN` | Único origen permitido por CORS | `http://localhost:5173` |
-| `SESSION_COOKIE_NAME` | Nombre de la cookie de sesión | `pta_session` |
-| `SESSION_TTL_HOURS` | Duración de la sesión en horas | `8` |
-| `COOKIE_SECURE` | Obliga HTTPS para la cookie | `false` en local; `true` en producción |
-| `COOKIE_SAME_SITE` | Política de envío de cookie | `lax` en local |
-| `SII_API_BASE_URL` | URL base del servicio institucional | `https://sii.celaya.tecnm.mx` en configuración local |
-| `SII_REQUEST_TIMEOUT_MS` | Tiempo máximo de espera para solicitudes a SII | `10000` |
-| `SUPABASE_URL` | URL del proyecto Supabase | Configurar solo fuera del repositorio |
-| `SUPABASE_SECRET_KEY` | Llave exclusiva del backend para acceso administrativo | Nunca exponer al frontend |
-| `SII_TOKEN_ENCRYPTION_KEY` | Llave Base64 de 32 bytes para cifrar el JWT institucional antes de persistirlo | Nunca exponer ni confirmar en Git |
+| Variable | Uso / ejemplo local |
+|---|---|
+| NODE_ENV | development, test o production |
+| PORT | 3000 local; en Render se usa el puerto proporcionado al servicio |
+| FRONTEND_ORIGIN | http://localhost:5173; origen exacto del frontend desplegado en producción |
+| SESSION_COOKIE_NAME | pta_session; nombre heredado de la propuesta inicial |
+| SESSION_TTL_HOURS | 8; duración fija, sin renovación por actividad |
+| COOKIE_SECURE | false local HTTP; true en producción HTTPS |
+| COOKIE_SAME_SITE | lax local; none solo con Secure y según despliegue |
+| SII_API_BASE_URL | https://sii.celaya.tecnm.mx; cliente añade rutas con /api |
+| SII_REQUEST_TIMEOUT_MS | 10000 por defecto, máximo 30000 |
+| SUPABASE_URL | Proyecto compartido; no copiar valor real en documentos |
+| SUPABASE_SECRET_KEY | Clave privada de servidor; nunca VITE_* |
+| SII_TOKEN_ENCRYPTION_KEY | Base64 de 32 bytes, compartida entre backends que usan la misma tabla de sesiones |
 
-### Entorno local y producción
+La llave de cifrado no se regenera al instalar el proyecto de un compañero. Cada integrante usa sus propias credenciales institucionales para probar. La tabla app_sessions persiste sesiones; resources/loans persisten el extra. No hay script SQL reproducible en el código revisado y su creación fue pospuesta por Emilio.
 
-En local, frontend y backend operan en `localhost` con puertos distintos. Para producción, la cookie debe ser segura (`COOKIE_SECURE=true`). Si Render aloja frontend y backend en dominios diferentes, podría requerirse `COOKIE_SAME_SITE=none`, lo cual exige HTTPS y la opción `Secure`. La alternativa más robusta es usar subdominios propios del mismo sitio, como `app.ejemplo.com` y `api.ejemplo.com`.
+### Frontend
+
+frontend/.env.example contiene VITE_API_URL y VITE_ADMIN_CONTROL_NUMBER. La configuración real de Vite se mantiene en un archivo local ignorado o en las variables de build de Render; cambiarla requiere reiniciar Vite o reconstruir el frontend.
+
+- VITE_API_URL: base del backend propio. Si falta usa http://localhost:3000; no apuntar a SII. No configurar una URL Render por accidente al probar ambos servicios locales.
+- VITE_ADMIN_CONTROL_NUMBER: selecciona la variante visual de Resources. Es público por diseño y no acredita un rol en backend. No documentar su valor real ni considerarlo un secreto de autorización.
+
+Después de pull ejecutar npm install para sincronizar node_modules con package-lock.json. En el diagnóstico local faltaban lucide-react, react-router-dom y recharts; ya aparecen instaladas. Las variables configuradas en Render no se descargan con Git.
+
+### Despliegue y evidencia
+
+Rebo realizó el despliegue en Render, según informó Emilio. La arquitectura mantiene frontend estático y API Express independientes. No hay render.yaml ni URLs públicas en los archivos revisados; no se infieren comandos exactos del panel ni se inventan enlaces. Esta revisión no verificó cookies, configuración SPA, permisos ni stock de producción. La configuración local de backend conserva origen localhost:5173, cookie no Secure y SameSite=lax. El valor trust proxy=1 está en app.ts; no se validó su topología real desde Render.
 
 ## Scripts
 
@@ -662,11 +702,7 @@ Respuesta esperada:
 - Los cambios se revisan mediante Pull Request antes de integrarse a `main`.
 - No se realizan commits automáticos por el asistente; cada integrante crea sus propios commits.
 
-Rama sugerida para la próxima consolidación del backend de Emilio (la IA no la crea):
-
-```text
-feature/backend-validation
-```
+Los módulos actuales ya están integrados. Cualquier corrección de los hallazgos requiere una rama elegida por el integrante; no volver a crear las antiguas tareas de inicialización ni realizar operaciones Git desde el agente.
 
 ## Historial técnico
 
@@ -744,12 +780,16 @@ feature/backend-validation
 - Se confirmó contra SII real que el perfil institucional contiene los indicadores bajo `data`; inicialmente nuestra API lo envolvía en `profile.data`. El DTO actual expone directamente `profile.academicProgress`, `profile.averages` y demás campos propios, sin esa estructura cruda.
 - Se validaron localmente las rutas públicas y protegidas; sin cookie, perfil devuelve `401` sin contactar SII.
 
-## Próximo cambio previsto
+## Estado de cierre y verificaciones
 
-Perfil, Kardex, calificaciones y horario disponen de DTO. El controlador de horario ya tiene un solo envío. Tras las correcciones de sesiones y errores se ejecutó por el agente un ciclo real autorizado contra SII y Supabase, además de las pruebas aisladas; ambos alcances están detallados en la sección de regresiones. No se conservaron credenciales ni respuestas académicas en el repositorio.
+Las pantallas y la función extra ya existen; no se deben volver a asignar como trabajo por iniciar. El cierre depende de resolver o aceptar explícitamente los hallazgos reales del extra y las diferencias académicas descritas arriba, no de borrar la lista de pendientes. Esta tarea solo cambia DOCUMENTACION.md y CONTEXTO.md, sin modificar aplicación, dependencias o configuración.
 
-La consolidación de sesiones y errores ya se probó con 107 casos aislados y un ciclo real completo. Los ocho casos inicialmente no cumplidos están corregidos y cubiertos por regresiones. Antes de considerar producción lista, faltan configuración y prueba de navegador en Render, caracterización de fallos prolongados/reintentos de Supabase, revisión de límites de intentos y esquema SQL reproducible. Rebo puede conectar todo el frontend con los contratos existentes; debe respetar el origen configurado y `credentials: 'include'`. La función extra sigue pendiente de elección conjunta, con liderazgo de Rebo y apoyo de Emilio. No se realizan commits, cambios de rama ni despliegues por el agente.
+Verificación actual: check correcto con cuatro advertencias de lint; build correcto con advertencia de bundle aproximado de 700 KB minificado; regresiones institucionales 107/107. Una prueba aislada de solo lectura confirmó GET /resources/admin/loans=200 sin cookie con base ficticia vacía, frente a /student/profile=401. No se accedió a datos reales ni se inició sesión en esta revisión.
+
+El despliegue Render fue informado por Emilio; no se accedió a sus URLs/configuración. SQL/rate limiting permanecen pospuestos por decisión del equipo. No se ejecutan commits, cambios de rama, PR, merges ni despliegues por el agente.
 
 ### Mantenimiento de los documentos Markdown
 
-`README.md` describe exclusivamente tecnología, funcionamiento, requisitos, instalación y ejecución actuales. Cumple esos dos apartados del PDF; las capturas aún no están incorporadas, por lo que ese tercer apartado no se considera completo. El README no contiene roadmap, propuestas ni despliegues futuros; las capturas reales se incorporan al terminar la práctica conforme a lo solicitado por Emilio. `frontend/README.md` remite a la guía principal y documenta la base React/Vite/TypeScript actual, en lugar de instrucciones genéricas de la plantilla. `CONTEXTO.md` concentra reparto, coordinación y guía para agentes; este archivo conserva explicaciones técnicas y pendientes. Las correcciones actuales cambian validación de sesión/perfil y manejo HTTP, sin modificar el criterio académico ni agregar dependencias.
+Actualizar secciones existentes por archivo y separar implementación, pruebas y limitaciones. Esta revisión sustituyó pendientes antiguos de frontend/elección extra y fusionó las dos secciones de app.ts. Conserva el diseño institucional, DTO y pruebas.
+
+README.md y frontend/README.md quedan fuera de esta edición solicitada: el README raíz aún menciona la plantilla y sus capturas no se comprobaron. No se afirma que todo documento del repositorio esté actualizado. El README debe describir estado actual, instalación y tecnología sin roadmap ni evidencias inventadas.

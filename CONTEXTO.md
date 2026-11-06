@@ -1,354 +1,243 @@
-# Contexto para Rebo y su agente de IA
+# Contexto para Emilio, Rebo y sus agentes de IA
 
-Este archivo permite que Rebo entregue a un agente de IA el contexto suficiente para desarrollar sus tareas sin alterar decisiones ya tomadas. Debe leerse por completo antes de realizar cambios.
+Actualizado el 6 de noviembre de 2026 contra el código integrado mediante pull. Este archivo describe decisiones y estado real; DOCUMENTACION.md explica funciones, módulos y limitaciones en detalle.
 
-## Identidad del equipo y reparto de trabajo
+## Reglas obligatorias para la IA
 
-| Integrante | Identificador en este documento | Responsabilidades |
-|---|---|---|
-| Emilio | `Emilio` | Backend principal: integración SII de autenticación, perfil, Kardex, calificaciones y horario; sesiones, cifrado, Supabase, contratos/DTO, seguridad y pruebas API; configuración del despliegue backend, documentación y exposición de su parte. Apoya y revisa técnicamente la funcionalidad adicional. |
-| Rebo | `Rebo` | Frontend completo: login, cliente HTTP, rutas privadas, navegación, dashboard, Kardex, calificaciones, horario, diseño responsive, estados y pruebas UI; despliegue frontend, documentación y exposición de su parte. Lidera la funcionalidad adicional: propuesta, interfaz, lógica y persistencia/backend propios necesarios, con apoyo de Emilio. |
+- Nunca hacer commits, pushes, cambios de rama, Pull Requests, merges ni despliegues. El integrante revisa y realiza esas operaciones personalmente, también cuando usa GitHub Desktop.
+- Editar archivos solo dentro de la tarea autorizada; explicar decisiones importantes y avanzar por pasos.
+- Preservar cambios locales ajenos. Durante esta revisión package-lock.json ya tenía modificaciones del usuario; no se alteró ni se revirtió.
+- No leer/imprimir secretos ni incorporar contraseñas, cookies, JWT o datos personales reales a documentos, fixtures o logs.
+- Actualizar la sección existente de cada archivo en DOCUMENTACION.md, sin repetirla por modificación. Sincronizar este contexto si cambian contratos/estado.
+- No sustituir los puntos institucionales obligatorios por respuestas simuladas. Los dobles de prueba existen solo dentro de tests.
+- Distinguir implementación, pruebas aisladas, evidencia real y trabajo pospuesto. No borrar hallazgos reales para afirmar que no hay pendientes.
 
-Este reparto sustituye el inicial por módulos mixtos: Emilio no tiene asignadas las pantallas React de dashboard ni Kardex. Ambos eligen y justifican la funcionalidad extra; Rebo asume su responsabilidad principal y coordina con Emilio cualquier cambio en backend, base de datos o contratos. La función todavía no está elegida, por lo que no se considera implementada. Ambos participan en integración y demostración final.
+Ejemplo de comandos que el integrante puede ejecutar después de revisar:
 
-## Regla crítica para el agente de IA
-
-La IA **nunca debe realizar commits, pushes, Pull Requests, merges, cambios de rama ni publicar despliegues**. Puede modificar archivos locales si Rebo lo solicita, verificar el proyecto y, al finalizar un conjunto coherente de cambios, debe mostrar los comandos exactos para que Rebo cree su propio commit.
-
-Ejemplo de cierre que la IA debe proporcionar:
-
-```powershell
+~~~powershell
 git status
-git add <archivos-correspondientes>
-git commit -m "feat(frontend): descripcion-corta"
-git push -u origin feature/nombre-de-la-rama
-```
+git add <archivos-del-conjunto>
+git commit -m "docs: update integrated project context"
+git push -u origin <rama-elegida-por-el-integrante>
+~~~
 
-Rebo ejecuta esos comandos personalmente, revisa los cambios y abre el Pull Request hacia `main`.
+## Proyecto y reparto
 
-## Proyecto
+- Ubicación: C:\Escuela\9no_semestre\TOPWEB\Examen3.
+- Monorepo npm con frontend/ y backend/; main estable, feature/* y PR revisados.
+- Producto implementado: aplicación académica SII ITC con Centro de Préstamos.
+- El planificador académico fue una propuesta inicial descartada como descripción del alcance actual. El nombre npm y la cookie pta_session siguen siendo identificadores históricos; no renombrarlos automáticamente.
 
-- Nombre provisional: **Aplicación Académica SII ITC (Examen 3)**. La funcionalidad adicional y el nombre final siguen pendientes de decisión.
-- Ubicación local: `C:\Escuela\9no_semestre\TOPWEB\Examen3`.
-- Repositorio: monorepo npm con `frontend/` y `backend/`.
-- Rama estable: `main`.
-- Flujo de colaboración: ramas `feature/<descripcion>` y Pull Requests. No se desarrolla directamente sobre `main`.
-
-Antes de iniciar una tarea, Rebo debe crear su rama:
-
-```powershell
-git switch main
-git pull origin main
-git switch -c feature/nombre-de-la-tarea
-```
-
-Si existen cambios locales no confirmados de Emilio, Rebo no debe mezclarlos ni sobrescribirlos. Debe esperar a que Emilio cree su commit o usar una copia/branch limpia del repositorio.
-
-## Requisito académico principal
-
-La aplicación debe usar datos reales de la API institucional SII ITC para login, perfil, calificaciones, kardex y horario. No se pueden simular las respuestas de esos puntos obligatorios.
-
-**El frontend nunca debe comunicarse directamente con la API del SII ITC.** Solo puede llamar al backend propio. El backend será el único componente autorizado para consultar SII ITC.
-
-La funcionalidad adicional sí puede incluir datos simulados si no existen datos suficientes. El equipo todavía no ha seleccionado esa funcionalidad; el Planificador Inteligente de Trayectoria Académica es solamente una propuesta y no debe implementarse ni presentarse como decisión final.
-
-El PDF original confirma estas rutas institucionales; no deben adivinarse ni buscarse mediante pruebas de rutas alternativas:
-
-| Método | Ruta SII | Autenticación |
-|---|---|---|
-| POST | `/api/login` | JSON `{ email, password }` |
-| GET | `/api/movil/estudiante` | Bearer token |
-| GET | `/api/movil/estudiante/calificaciones` | Bearer token |
-| GET | `/api/movil/estudiante/kardex` | Bearer token |
-| GET | `/api/movil/estudiante/horarios` | Bearer token |
-
-El host configurado en `SII_API_BASE_URL` es `https://sii.celaya.tecnm.mx`; las rutas anteriores ya incluyen `/api`. El PDF documenta las rutas, pero no el esquema completo del JSON de Kardex, calificaciones u horarios. Su contrato debe confirmarse mediante consultas reales desde el backend antes de definir sus DTO.
-
-Requisitos de interfaz que deben conservarse durante el desarrollo:
-
-- Login con validación, manejo de errores, redirección al dashboard y rutas privadas que regresen al login al perder la sesión.
-- Dashboard personalizado con indicadores visuales, carga y mensajes de error.
-- El PDF solicita materia, período y calificación final, búsqueda/filtro en tiempo real y colores de desempeño. La presentación acordada sigue el SII actual: parciales disponibles en Calificaciones del período en curso y resultados finales institucionales por materia/período en Kardex. No llamar “final” a una lista de parciales ni inventar una nota cuando todavía no existe.
-- Kardex con historial completo estructurado y horario organizado por día y hora, en secciones independientes con navegación fluida.
-- Funcionalidad adicional original con backend de administración y una propuesta que justifique sus beneficios. Puede formar parte de Express; no exige un servicio adicional independiente.
-- README con instalación, ejecución, descripción de la tecnología y capturas, publicación y demostración en vivo con participación de ambos integrantes. Las capturas y el README final se harán al terminar la práctica.
-
-## Arquitectura acordada
-
-```text
-Navegador
-  │
-  ▼
-Frontend React + Vite + TypeScript (Render Static Site)
-  │ solicitudes HTTPS solo al backend propio
-  ▼
-Backend Node.js + Express + TypeScript (Render Web Service)
-  ├── API SII ITC: autenticación y datos académicos oficiales
-  └── Supabase PostgreSQL: sesiones y datos propios de la funcionalidad adicional elegida
-```
-
-### Sesiones
-
-La sesión usa una cookie `httpOnly`.
-
-- El navegador no puede leerla mediante JavaScript.
-- El JWT institucional de SII nunca se entrega al frontend ni se guarda en `localStorage` o `sessionStorage`.
-- La cookie contiene solo un identificador de sesión aleatorio.
-- El backend asocia ese identificador con el JWT institucional cifrado y guardado del lado servidor, mediante Supabase.
-- El frontend deberá incluir `credentials: 'include'` al consumir el backend.
-- El backend configura CORS con origen explícito y `credentials: true`.
-
-Para producción, la cookie debe usar `Secure=true`. Si frontend y backend se mantienen en dominios Render distintos, puede requerirse `SameSite=None` y siempre `Secure=true`. La opción más estable es configurar subdominios propios, por ejemplo `app.dominio.com` y `api.dominio.com`.
-
-## Estado real actual
-
-### Confirmado previamente en GitHub
-
-- Monorepo inicial.
-- `frontend/` creado con React, Vite y TypeScript.
-- `backend/` creado con Node.js, Express y TypeScript.
-- Endpoint de salud `GET /health`.
-- Scripts npm de desarrollo, build y check.
-- README, `.gitignore`, `.node-version` y configuración TypeScript.
-
-### Backend implementado por Emilio
-
-- Autenticación real contra SII ITC mediante `POST /auth/login`.
-- Sesión local con cookie `httpOnly`; el JWT de SII se cifra y persiste solo en Supabase.
-- `GET /auth/session`, `POST /auth/logout` y middleware reutilizable de sesión.
-- `GET /student/profile`, protegido por sesión y conectado al endpoint real de perfil SII.
-- DTO `StudentProfile` que valida y normaliza la respuesta institucional mediante Zod antes de entregarla al frontend.
-- `GET /student/grades` protegido, conectado a SII y normalizado mediante `StudentGrades`. Emilio compartió la respuesta autenticada normalizada; se comprobó que coincide con el DTO. HTTP sin cookie devuelve `401`. Sus evaluaciones se presentan como parciales, no como finales.
-- `GET /student/kardex` protegido, conectado a SII y normalizado por `student-kardex.dto.ts`. El DTO pasó pruebas con la respuesta completa y el endpoint normalizado devolvió `200` en la prueba real posterior a la consolidación; sin cookie devuelve `401`.
-- `GET /student/schedule` protegido, consulta institucional y DTO `StudentSchedule`. El doble envío del controlador fue corregido; Emilio confirmó que sigue funcionando y la prueba HTTP sin cookie devuelve `401`.
-- CORS restringido a `FRONTEND_ORIGIN`, con credenciales habilitadas.
-- Las cookies malformadas se rechazan antes de la base de datos. Logout borra la cookie aun si falla la revocación; en ese fallo devuelve `500` sin afirmar que cerró la sesión de servidor.
-- Mutaciones de origen ajeno producen `403`; cuerpos JSON inválidos/grandes producen `400/413` JSON y rutas inexistentes, `404` JSON. Las respuestas de éxito no cambian.
-- Batería versionada: `npm test --workspace=backend`, con 107/107 comprobaciones aisladas. También pasaron `check` y `build`.
-
-Detalles de integración confirmados que Rebo no debe sustituir ni exponer:
-
-- El JWT de login SII existe en `message.login.token`, pero solo lo procesa el backend.
-- El endpoint propio de perfil responde `200 { profile: StudentProfile }`. El contrato actual usa `profile.controlNumber`, `profile.name`, `profile.email`, `profile.semester`, `profile.photoUrl`, `profile.academicProgress`, `profile.averages` y `profile.subjects`. Ya no devuelve `profile.data`.
-- El frontend debe enviar `credentials: 'include'` y nunca administrar tokens institucionales.
-
-Contrato del perfil normalizado: los campos opcionales ausentes se representan con `null`. El parser exige ahora envoltura de éxito y número de control no vacío como identidad mínima; el tipo `controlNumber: string | null` se conserva por compatibilidad con consumidores. Los demás valores hoja pueden ser `null`:
-
-| Objeto | Campos |
+| Integrante | Responsabilidad y trabajo |
 |---|---|
-| `profile` | `controlNumber`, `name`, `email` y `photoUrl`: texto; `semester`: número |
-| `profile.academicProgress` | `accumulatedCredits`, `complementaryCredits`, `progressPercentage`, `progressWhileEnrolledPercentage`: números |
-| `profile.averages` | `weighted`, `arithmetic`: números |
-| `profile.subjects` | `taken`, `passed`, `failed`, `failedNotAccredited`, `failedFirstAttempt`, `failedSecondAttempt`: números |
+| Emilio | Backend institucional: login/perfil/Kardex/parciales/horario, sesiones/cifrado/Supabase, DTO y pruebas API; soporte a integración, seguridad y documentación del backend |
+| Rebo | Frontend completo: login, rutas privadas, dashboard, Kardex, horario/parciales y recursos; Centro de Préstamos con interfaz y módulo Express; realizó el despliegue Render según lo informado por Emilio |
+| Ambos | Integración, revisión de contratos, decisiones, documentación y exposición; Emilio apoya el extra y Rebo coordina cambios sobre módulos institucionales |
 
-El DTO convierte números recibidos como texto a `number`; el frontend debe distinguir `null` de cero. Una estructura incompatible produce `502` mediante el controlador. Se confirmó que `data.persona` institucional es texto y ahora se expone como `profile.name: string | null`, quitando espacios exteriores sin modificar acentos ni capitalización. Rebo debe añadir `name` al tipo frontend y puede usarlo en dashboard/encabezado; si es `null`, mostrar un texto neutral. Ausencia y `null` se conservan como `null`; un objeto o texto vacío se rechaza con `502`. No se devuelve `persona` crudo ni se incluyen nombres reales en fixtures o logs.
+Dashboard y Kardex React no son tareas pendientes de Emilio. No reasignar trabajo inicial ya terminado. Rebo puede mantener el backend del extra coordinándose con Emilio; los módulos institucionales y de sesiones no deben alterarse sin acuerdo.
 
-Validaciones realizadas: compilación backend y prueba aislada del DTO con datos válidos e inválidos; flujo manual con SII real (`health=200`, `login=200`, `profile=200`, `logout=204`); `npm run check` pasó en la revisión posterior. El frontend sigue siendo la plantilla de Vite, por lo que todavía no hay login visual ni dashboard integrado. No se deben incorporar datos personales de esas pruebas a documentos ni fixtures.
+## Estado real
 
-Contrato de Kardex disponible: `200 { kardex: { progressPercentage: number, subjects: KardexSubject[] } }`. Cada registro contiene `name`, `code`, `period`, `credits`, `grade`, `gradeLabel`, `evaluationDescription` y `semester`. `credits`, `semester` y las notas numéricas se convierten a números; `grade` es `number | null`, mientras que `gradeLabel` siempre es texto para mostrarlo. Se encontró `AC` en la respuesta real: se conserva como etiqueta con `grade: null`, sin asignarle un valor numérico. Los períodos como `26/V` se conservan como texto. La lista mantiene todos los intentos y el orden de SII; ya no se debe buscar `kardex.data.kardex` desde React.
+Ya están implementados:
+- Auth institucional real, cookie httpOnly, UUID, JWT cifrado en app_sessions, expiración/revocación y cuatro DTO académicos.
+- React Router, AuthContext, ProtectedRoute, servicios HTTP y Layout.
+- Dashboard con nombre/foto/promedio/gráficas y Top 5; Kardex con búsqueda/orden; Carga Académica con agenda y tarjetas de parciales.
+- Centro de Préstamos: catálogo, reservar/cancelar, Mis Préstamos, panel global, entregar/devolver, crear recurso y ajustar stock.
+- Despliegue en Render realizado por Rebo y funcionamiento reportado por Emilio. No se recibieron URLs ni se verificó el panel/producción en esta revisión.
 
-Contrato de calificaciones disponible: `200 { grades: { periods: [...] } }`. Cada período tiene `code`, `year`, `description` y `subjects`. Cada materia tiene `groupId`, `name`, `code`, `group` y `assessments`. Cada evaluación tiene `id`, `number`, `grade: number | null` y `gradeLabel: string | null`. La respuesta real revisada contiene un período, cuatro materias y 16 evaluaciones, ocho pendientes; esas cantidades son datos de prueba, no límites del contrato. Se conserva el orden institucional. `calificaiones` es el nombre original de SII y se traduce a `assessments`.
+No es correcto mantener pendientes antiguos de “crear frontend”, “crear dashboard”, “elegir extra” o “comenzar deploy”. Tampoco es correcto afirmar que no hay problemas: los hallazgos de permisos/inventario y detalles académicos descritos más abajo siguen en el código.
 
-### Criterio académico y presentación acordada
+## Arquitectura y fuente de verdad
 
-Según la explicación de Emilio y las capturas del SII, el semestre actual tiene cuatro parciales independientes: se requiere aprobar cada uno con 70 o más y la regularización corresponde a los parciales reprobados. El resultado final se registra al cerrar la materia y se consulta en Kardex. Esta explicación guía la presentación; el backend actual no calcula aprobación, regularización ni una nota final.
+~~~text
+Navegador / React + Vite + TypeScript
+                |
+                v
+Backend Node.js + Express + TypeScript
+       |                         |
+       v                         v
+API SII ITC                 Supabase PostgreSQL
+auth y datos oficiales     app_sessions, resources, loans
+~~~
 
-- **Calificaciones / materias inscritas:** mostrar las notas por parcial tal como llegan en `assessments`, conservando sus números y notas disponibles. Se pueden mostrar uno, dos, tres o cuatro parciales capturados, o los cuatro espacios con “Pendiente” en los ausentes. Usar la lista recibida, sin fijar en el DTO un número universal de evaluaciones.
-- **Sin notas capturadas:** mostrar “Calificaciones aún no disponibles”. Para un parcial aislado con `gradeLabel: null`, mostrar “Pendiente” o `—`; nunca sustituirlo por cero. Un cero real enviado por SII sí debe conservarse y mostrarse.
-- **Kardex:** mostrar el resultado final institucional de cada registro de materia y período, respetando intentos y etiquetas como `AC`. No obtener una final promediando parciales incompletos ni interpretar el cuarto parcial como final.
-- Los colores de desempeño se aplican a notas numéricas disponibles; las ausentes tienen un estado neutral y las etiquetas textuales se conservan.
-- No se implementa un cruce automático entre `/grades` y `/kardex`: cada pantalla usa su fuente correspondiente. Si se solicita ese cruce después, deberá distinguir materia, período e intentos.
+El frontend nunca llama directamente a SII. Los servicios revisados usan VITE_API_URL o http://localhost:3000 y credentials: 'include'. El JWT institucional nunca se entrega a React ni se almacena en localStorage/sessionStorage.
 
-La distinción entre parciales actuales y finales históricos queda acordada; deja de tratarse como un endpoint de final faltante. La pantalla y sus etiquetas deben hacer esa distinción explícita sin afirmar que ya existe una nota final del semestre en curso.
+Rutas institucionales documentadas por el PDF:
+| Método | Ruta SII |
+|---|---|
+| POST | /api/login |
+| GET | /api/movil/estudiante |
+| GET | /api/movil/estudiante/calificaciones |
+| GET | /api/movil/estudiante/kardex |
+| GET | /api/movil/estudiante/horarios |
 
-Contrato de horario implementado: `200 { schedule: { periods: [...] } }`. Cada período tiene `code`, `year`, `description` y `subjects`. Cada materia tiene `groupId`, `group`, `name`, `code`, `shiftCode`, `programName`, `levelCode` y `sessions`. Cada sesión tiene `day` (1=lunes a 6=sábado), `startTime`, `endTime` en formato local `HH:mm` y `classroom: string | null`. Días sin horario no generan sesiones; una materia sin sesiones se conserva. Un bloque de dos horas cuenta como una sesión, sin dividirse ni convertirse a UTC. Rebo debe agrupar/ordenar para mostrar la agenda; no se ha implementado detección de traslapes.
+El host del backend es https://sii.celaya.tecnm.mx; las rutas del cliente ya incluyen /api. SII login devuelve el JWT en message.login.token; solo el backend lo utiliza.
 
-El DTO de horario pasó pruebas aisladas de días, horas y valores nulos. Emilio corrigió la respuesta duplicada de `getSchedule` y confirmó que sigue funcionando. La revisión constató un solo envío y `npm run check` pasó. También se verificó por HTTP `401` sin cookie en los cuatro endpoints académicos, sin usar credenciales institucionales.
+## Sesión implementada
 
-Consolidación completada para los casos cubiertos: 107 pruebas aisladas de sesión, errores, cifrado, origen y configuración, más una prueba real autorizada con SII y Supabase. Login, sesión y los cuatro recursos devolvieron `200`; logout `204`; reutilizar la cookie tras logout, `401`. Se creó y revocó solo la sesión de esa prueba, sin registrar secretos ni datos académicos. Los tests aislados no acceden a servicios reales ni al `.env` del equipo.
+1. React envía credenciales a /auth/login; el backend consulta SII.
+2. Al recibir JWT válido, genera UUID e inserta app_sessions con token cifrado AES-256-GCM y fecha expires_at.
+3. El navegador recibe una cookie con solo el UUID y { authenticated: true }.
+4. El middleware valida UUID, existencia, expiración y revoked_at, descifra token solo dentro del backend y actualiza last_seen_at.
+5. El controlador consulta SII con Bearer interno, valida DTO y devuelve datos.
+6. Logout elimina cookie y revoca la fila; si falla la revocación, devuelve 500 sin afirmar cierre remoto.
 
-Siguientes pendientes de Emilio: esquema SQL reproducible, configuración de despliegue, comprobación en navegador con dominios reales, revisión de límites de intentos y latencia/reintentos de Supabase. Rebo puede construir todo el frontend con los mismos DTO y contratos; el navegador debe usar el origen configurado y `credentials: 'include'`. No agregar excepciones de origen para evitar un `403`: corregir `FRONTEND_ORIGIN` si cambian los puertos. Postman/comandos sin Origin, Referer o metadatos cross-site siguen funcionando. Ambos deben elegir la función extra liderada por Rebo; no comenzar automáticamente otra fase.
+Duración local: ocho horas fijas; actividad no prolonga expires_at. Una nueva autenticación exitosa crea otra fila. Las filas vencidas/revocadas no se eliminan automáticamente. Si SII invalida su JWT antes, el siguiente recurso académico lo detecta. /auth/session comprueba la sesión local, no consulta SII en cada llamada.
 
-Rebo debe partir de `main` actualizado y verificar que los Pull Requests de Emilio estén fusionados antes de conectar el frontend. Puede crear módulos backend propios de la función extra que lidere, coordinando su diseño; no debe alterar los módulos institucionales o de sesiones de Emilio sin coordinación.
+httpOnly impide lectura por JavaScript de página, no por el propietario en DevTools. El UUID también es una credencial y no se debe compartir. En producción se requiere HTTPS/Secure y configuración de SameSite/CORS acorde con los dominios.
 
-## Estructura actual
+## Contratos institucionales propios
 
-```text
-.
-├── frontend/                         # Responsabilidad principal inicial de Rebo
-│   ├── src/
-│   │   ├── App.tsx                   # Plantilla inicial de Vite, pendiente de reemplazar
-│   │   ├── App.css
-│   │   ├── index.css
-│   │   └── main.tsx
-│   ├── package.json
-│   └── vite.config.ts
-├── backend/                          # Responsabilidad principal inicial de Emilio
-│   ├── src/
-│   │   ├── app.ts
-│   │   ├── server.ts
-│   │   ├── config/env.ts
-│   │   ├── lib/supabase.ts            # Cliente Supabase exclusivo del backend
-│   │   └── modules/
-│   │       ├── auth/                 # Login, sesión, cookie y middleware
-│   │       ├── sii/                  # Cliente institucional exclusivo de backend
-│   │       └── student/              # Router, controlador y DTO de perfil, Kardex, calificaciones y horario
-│   ├── .env.example
-│   ├── package.json
-│   └── tsconfig.json
-├── DOCUMENTACION.md                  # Documentación técnica viva
-├── CONTEXTO.md                       # Esta guía para Rebo y su IA
-├── package.json
-└── package-lock.json
-```
+| Método/ruta | Resultado de éxito |
+|---|---|
+| GET /health | { status: 'ok' } |
+| POST /auth/login | Cookie y { authenticated: true } |
+| GET /auth/session | { authenticated: true } |
+| POST /auth/logout | 204 sin cuerpo |
+| GET /student/profile | { profile: StudentProfile } |
+| GET /student/kardex | { kardex: StudentKardex } |
+| GET /student/grades | { grades: StudentGrades } |
+| GET /student/schedule | { schedule: StudentSchedule } |
 
-## Herramientas y comandos
+Los cuatro recursos y /auth/session requieren cookie válida; sin ella responden 401. Cookie malformada se rechaza antes de Supabase; logout sin cookie/formato válido devuelve 204 idempotente. Los errores institucionales usan { message }, con 401/502/503/500 según causa. JSON entrante inválido/grande produce 400/413 y ruta inexistente 404 JSON.
 
-Requisitos:
+### Perfil
 
-- Node.js 22 LTS como versión objetivo (se aceptan versiones 22 a 24).
-- npm 10 o superior.
+profile contiene controlNumber, name, email, semester, photoUrl, academicProgress, averages y subjects.
+- academicProgress: accumulatedCredits, complementaryCredits, progressPercentage, progressWhileEnrolledPercentage.
+- averages: weighted, arithmetic.
+- subjects: taken, passed, failed, failedNotAccredited, failedFirstAttempt, failedSecondAttempt.
+- name se obtiene del texto institucional persona, conservando acentos/capitalización y quitando espacios exteriores. Ausencia/null produce null; objeto o texto vacío es incompatible.
+- El parser exige envoltura de éxito e identidad institucional mínima; campos opcionales pueden ser null. No buscar profile.data.
+- Dashboard ya usa name y Resources utiliza controlNumber, aunque aún debe dejar de confiar en studentId suministrado por cliente.
 
-Desde la raíz del repositorio:
+### Kardex
 
-Antes de ejecutar el backend, configurar `backend/.env` a partir de `backend/.env.example`, sin compartir valores reales. Supabase debe tener la tabla `app_sessions`; consultar `DOCUMENTACION.md` para su estructura. `npm install` no crea esa tabla. Los dos comandos `dev:*` se ejecutan en terminales distintas.
+kardex contiene progressPercentage y subjects. Cada registro tiene name, code, period, credits, grade, gradeLabel, evaluationDescription y semester. Backend devuelve credits/semester numéricos, grade number|null y gradeLabel textual. AC se conserva como etiqueta con grade=null; no equivale a cero. Se conservan orden/intentos y períodos como 26/V sin interpretarlos.
 
-Cada integrante mantiene su `.env` fuera de Git. Si ambos usan el mismo proyecto y tabla `app_sessions`, deben usar la misma llave `SII_TOKEN_ENCRYPTION_KEY` para descifrar las sesiones compartidas; no regenerarla al configurar el equipo de Rebo. Compartir secretos mediante un canal privado seguro y usar credenciales institucionales individuales para probar. Las claves nunca pertenecen a React, variables `VITE_*`, documentos ni conversaciones con agentes.
+El servicio frontend devuelve únicamente subjects. Su interfaz semester declara string|null aunque backend entrega número: discrepancia real documentada, todavía sin corregir.
 
-```powershell
+### Parciales y horario
+
+grades.periods contiene code/year/description/subjects. Materias: groupId/name/code/group/assessments; evaluación: id/number/grade/gradeLabel. La propiedad original SII calificaiones se traduce a assessments.
+
+schedule.periods contiene code/year/description/subjects. Materias: groupId/group/name/code/shiftCode/programName/levelCode/sessions. Sesión: day (1=lunes a 6=sábado), startTime/endTime locales HH:mm y classroom string|null. Sin horario no genera sesión; un bloque de dos horas sigue siendo una sesión. El DTO no detecta traslapes.
+
+Los servicios frontend de grades/schedule solo exponen subjects del primer período; Schedule los cruza por groupId. La vista está en /horario, no /schedule. No hay página /calificaciones independiente.
+
+## Criterio académico acordado
+
+Según Emilio y las capturas del SII, el semestre actual tiene cuatro parciales independientes; cada uno se aprueba con 70 o más y la regularización corresponde a los reprobados. El resultado final se refleja al cierre en Kardex. El backend no calcula aprobación, regularización ni final propia.
+
+- Calificaciones actuales: mostrar notas por parcial disponibles, manteniendo la cantidad/numeración recibida; no imponer cuatro como límite universal del DTO.
+- Ausencia de nota: null, no cero. Mostrar “Pendiente” o “—”; si no hay ninguna, “Calificaciones aún no disponibles”. Un cero real se conserva.
+- Kardex: resultado final institucional por registro de materia/período/intento; no usar promedio de parciales incompletos ni llamar final al cuarto parcial.
+- No se cruza automáticamente grades con Kardex para inventar una final.
+- La vista actual muestra parciales en tarjetas dentro de Carga Académica; tiene diferencias pendientes con esta presentación acordada, descritas abajo.
+
+## Frontend actual
+
+| Archivo/vista | Comportamiento |
+|---|---|
+| main.tsx / index.css | StrictMode, App y estilos globales |
+| App.tsx | AuthProvider, BrowserRouter, /login, privadas /dashboard,/kardex,/horario,/recursos; fallback al login |
+| services/auth.ts | login, checkSession, logout con cookie y base API configurable |
+| context/AuthContext.tsx | isAuthenticated/isLoading, checkAuth y logout; comprobación al montar |
+| components/ProtectedRoute.tsx | Carga, redirección o Outlet según contexto |
+| components/Layout/ | Menú Panel/Kardex/Horario/Recursos y logout |
+| services/student.ts | Extrae profile |
+| services/kardex.ts | Extrae kardex.subjects |
+| services/grades.ts y schedule.ts | Extraen subjects del primer período |
+| pages/Dashboard/ | Perfil, promedio aritmético, gráficos y Top 5; base de créditos fija en 260 |
+| pages/Kardex/ | Búsqueda nombre/período, orden de columnas, badges numéricos y AC |
+| pages/Schedule/ | Agenda y tarjetas con parciales; hoy agenda solo lunes-viernes |
+| services/resources.ts y pages/Resources/ | API y paneles del Centro de Préstamos |
+
+Los estilos de componentes usan CSS Modules, iconos lucide-react y gráficas Recharts. AuthContext no tiene un interceptor global de 401 en cada servicio ni comprobación periódica; la caducidad con la app abierta puede dejar un error de datos hasta revalidar sesión.
+
+## Funcionalidad adicional elegida: Centro de Préstamos
+
+Persistencia propia en resources y loans; no inventar que usa datos del catálogo oficial universitario.
+
+Flujo funcional:
+- Catálogo y reservas: verifica stock, resta uno y crea pending_pickup con due_date tres días desde la reserva.
+- Mis Préstamos: consulta historial y permite cancelar si pending_pickup.
+- Administración: lista global, entrega pending_pickup→active, devolución→returned y devolución de stock.
+- Inventario: alta de recursos y ajuste de total_stock/available_stock con delta.
+
+| Método/ruta | Datos del cliente y respuesta actual |
+|---|---|
+| GET /resources | Lista de recursos |
+| POST /resources/reserve/:id | Body studentId; { message, loan } |
+| GET /resources/loans/:studentId | Lista del ID de ruta |
+| POST /resources/loans/:id/cancel | Body studentId; mensaje |
+| GET /resources/admin/loans | Lista global |
+| POST /resources/admin/loans/:id/activate | Mensaje |
+| POST /resources/admin/loans/:id/return | Mensaje |
+| POST /resources/admin/catalog | Formulario de recurso; fila creada |
+| PATCH /resources/admin/catalog/:id/stock | Body delta; recurso actualizado |
+
+**Importante: esa tabla describe el código actual, no un contrato seguro ya aprobado.**
+- resources.routes.ts no aplica middleware de sesión ni rol, incluidas las rutas admin.
+- El backend acepta studentId del cliente y aún tiene ALUMNO_MOCK_123 como fallback de reserva. La identidad debe derivarse de sesión en servidor.
+- VITE_ADMIN_CONTROL_NUMBER compara controlNumber en React para mostrar la variante administrativa; es configuración pública y no acredita permisos.
+- La protección de origen global no reemplaza autenticación/autorización.
+- resources.service.ts usa peticiones separadas y compensaciones manuales, no transacciones atómicas. Hay riesgo de carreras, actualización perdida de stock y errores de compensación ignorados.
+- markLoanAsReturned solo bloquea returned, no restringe a active/overdue; overdue está en el tipo/etiquetas de UI, pero no se encontró proceso que lo asigne automáticamente.
+- Se necesita validación servidor de formulario/delta; el HTML no la sustituye.
+- Los errores de recursos son { error }, a diferencia de { message } del API institucional; no prometer homogeneidad total.
+
+No ejecutar operaciones reales de préstamo/inventario para comprobar esos defectos sin una tarea autorizada. En esta revisión se comprobó solo lectura con base ficticia: /resources/admin/loans devolvió 200 sin cookie y /student/profile 401. No se consultaron datos reales.
+
+## Configuración local y Render
+
+Node admitido por el proyecto: 22 a 24; npm 10 o superior. Después de pull:
+
+~~~powershell
 npm install
-npm run dev:frontend
-npm run dev:backend
-npm run build
 npm run check
 npm test --workspace=backend
-```
+npm run build
+~~~
 
-Direcciones locales esperadas:
+Ejecutar frontend/backend en terminales distintas:
+~~~powershell
+npm run dev:backend
+~~~
+~~~powershell
+npm run dev:frontend
+~~~
 
-- Frontend: `http://localhost:5173`
-- Backend: `http://localhost:3000`
-- Salud del backend: `http://localhost:3000/health`, con respuesta `{ "status": "ok" }`
+Direcciones locales: backend http://localhost:3000, frontend http://localhost:5173, salud /health. Si Vite usa otro puerto, FRONTEND_ORIGIN debe ajustarse por el integrante, no desactivar controles.
 
-## Contratos de API actuales y previstos
+- backend/.env parte de backend/.env.example y contiene variables Supabase/cifrado/SII; no se comparte en Git. Mismo app_sessions implica misma llave SII_TOKEN_ENCRYPTION_KEY entre backends.
+- frontend/.env.example define VITE_API_URL y VITE_ADMIN_CONTROL_NUMBER. API_URL ausente usa localhost:3000; la variable admin ausente no muestra la variante correspondiente.
+- VITE_* es público; nunca poner claves de servidor allí. Reiniciar Vite o reconstruir tras cambiar variables.
+- En local: NODE_ENV=development, COOKIE_SECURE=false, COOKIE_SAME_SITE=lax y FRONTEND_ORIGIN local.
+- En Render: usar el backend publicado como VITE_API_URL, el frontend publicado como FRONTEND_ORIGIN, HTTPS/Secure y SameSite acorde con la separación real. El panel y sus valores concretos no se inspeccionaron en esta revisión.
+- Render ya fue desplegado por Rebo según Emilio; no hay render.yaml ni URLs públicas registradas en los archivos revisados. No inventarlas ni presentar configuración inferida como verificada.
 
-Los endpoints de autenticación, perfil, Kardex, calificaciones y horario están implementados. Las cuatro rutas académicas rechazan solicitudes sin cookie con `401`. Calificaciones entrega parciales; Kardex entrega los resultados finales registrados. La funcionalidad adicional sigue pendiente de elección. Rebo debe coordinar cualquier cambio de contrato con Emilio.
+## Verificaciones y cierre
 
-| Método y ruta | Solicitud | Respuesta esperada | Responsable |
-|---|---|---|---|
-| `POST /auth/login` | `{ email, password }` | Cookie de sesión y `{ authenticated: true }` | Emilio |
-| `GET /auth/session` | Cookie enviada automáticamente | `200 { authenticated: true }`; `401` sin sesión válida | Emilio |
-| `POST /auth/logout` | Cookie de sesión | Revoca sesión, elimina cookie y devuelve `204` | Emilio |
-| `GET /student/profile` | Cookie de sesión | `200 { profile: StudentProfile }` normalizado | Emilio |
-| `GET /student/grades` | Cookie de sesión | `200 { grades: StudentGrades }`; períodos, materias y evaluaciones normalizadas | Emilio |
-| `GET /student/kardex` | Cookie de sesión | `200 { kardex: StudentKardex }` normalizado y comprobado en flujo real | Emilio |
-| `GET /student/schedule` | Cookie de sesión | `200 { schedule: StudentSchedule }`; `401` sin cookie | Emilio |
-| Rutas de funcionalidad adicional | Por definir | Por definir tras seleccionar propuesta | Rebo lidera, Emilio apoya y revisa |
+Revisión del 6 de noviembre de 2026:
+- Dependencias nuevas lucide-react/react-router-dom/recharts instaladas después del diagnóstico local.
+- npm run check: éxito con cuatro advertencias de lint.
+- npm run build: éxito, advertencia por bundle frontend de unos 700 KB minificado.
+- npm test --workspace=backend: 107/107 pruebas aisladas institucionales; no cubren extra, UI ni Render.
+- Prueba adicional aislada de lectura: acceso admin de recursos sin cookie confirmado; no servicios reales.
+- Pruebas reales de SII/Supabase realizadas antes del pull: login/sesión/cuatro recursos 200, logout 204 y reutilización 401; nombre no vacío comprobado sin registrar su valor. No equivalen a una nueva validación de préstamos ni producción.
 
-Los cuatro contratos académicos anteriores están implementados. Rebo no debe inventar campos institucionales ni exponer tokens en la interfaz. `/auth/session` valida la sesión local; un JWT institucional inválido se detecta al consultar SII y los controladores académicos revocan entonces la sesión y devuelven `401` si la revocación tiene éxito. Los contratos de la función extra se acuerdan antes de implementarla.
+Trabajo implementado: frontend académico, Centro de Préstamos y despliegue informado. No hay que recrearlos. Hallazgos reales:
+1. Prioridad alta: sesión/propiedad/rol de recursos y eliminación del fallback ficticio.
+2. Integridad/validación de inventario y estados; no se garantiza atomicidad.
+3. Calificaciones actuales sin búsqueda/filtro materia/período, agenda sin sábado, notas null rojas y sin mensaje global de notas ausentes.
+4. Tipos de semester/classroom desalineados, base fija de 260 créditos y tratamiento global de 401.
+5. Evidencias de producción, pruebas visuales/capturas y exposición no certificadas en esta revisión. README raíz aún conserva texto antiguo; su actualización no se incluyó porque se solicitaron solo estos dos documentos.
 
-## Tareas de Rebo en orden sugerido
+**Pospuesto por Emilio:** script SQL reproducible y rate limiting. No son tareas nuevas obligatorias, no se implementaron y no se deben reactivar automáticamente.
 
-### 1. Login y protección de rutas frontend
+## Documentación y exposición
 
-Rama sugerida: `feature/login-route-protection`.
+DOCUMENTACION.md debe explicar problema, motivo, entradas/salidas, conexiones y estado/límites de cada módulo sin duplicar secciones. CONTEXTO.md resume decisiones y contratos para la continuidad. README debe describir lo existente, instalación y tecnologías; las capturas reales se incorporan según acuerdo, sin simularlas.
 
-Objetivo:
-
-- Instalar y configurar React Router.
-- Crear rutas públicas y privadas.
-- Construir interfaz de login accesible, validando campos vacíos y formato básico de correo.
-- Crear una capa o servicio de API que apunte solo al backend propio.
-- Implementar estados de carga y mensajes de error preparados para el contrato real.
-- Proteger rutas privadas consultando `GET /auth/session`, que ya está disponible; redirigir al login ante `401` también en las consultas académicas.
-
-Restricciones:
-
-- No llamar SII ITC desde React.
-- No guardar JWT institucional ni credenciales en el navegador.
-- Usar `credentials: 'include'` en las solicitudes futuras al backend.
-- No presentar una simulación como si fuera integración real; el login debe consumir el backend disponible mediante `credentials: 'include'`.
-
-### 2. Dashboard y Kardex
-
-Ramas sugeridas: `feature/dashboard-ui` y `feature/kardex-ui`, una tarea a la vez.
-
-- Consumir `/student/profile` para el dashboard con indicadores de créditos, avance y promedios; distinguir `null` de cero.
-- Consumir `/student/kardex` para el historial completo por materia/período y su resultado final institucional; conservar intentos y etiquetas textuales.
-- Reutilizar cliente HTTP, sesión y navegación del login; no crear otro mecanismo de autenticación.
-- Añadir carga, error, vacío y navegación entre secciones. Usar `profile.name` para el nombre del estudiante; coordinar con Emilio cualquier otro dato no incluido en los DTO.
-
-### 3. Calificaciones y horario
-
-Rama sugerida: `feature/grades-schedule-ui`.
-
-Objetivo:
-
-- Pantalla de calificaciones con tabla o tarjetas, materia, período y parciales disponibles, búsqueda/filtro en tiempo real e indicadores de desempeño; aplicar el criterio académico anterior. Los resultados finales registrados se muestran en Kardex.
-- Pantalla de horario organizada por día y hora, en formato de agenda o tabla.
-- Estados de carga, error y sin datos.
-- Consumir únicamente `GET /student/grades` y `GET /student/schedule`, disponibles tras integrar los PR correspondientes.
-
-### 4. Funcionalidad adicional de impacto: pendiente de decisión
-
-No iniciar esta fase hasta que Emilio y Rebo seleccionen y justifiquen una propuesta. Rebo lidera su implementación completa (interfaz, lógica, persistencia y módulo de administración/backend necesarios); Emilio apoya el diseño, revisa seguridad/contratos e integración y ayuda cuando se coordine. Definir rama y modelo de datos sin mezclar datos propios con datos institucionales ni duplicar sesiones. El reparto de ayuda se concreta al elegir el alcance.
-
-### 5. Pruebas de UI, responsive, despliegue frontend y documentación
-
-Rama sugerida: `feature/ui-quality-documentation`.
-
-Objetivo:
-
-- Revisar interfaz en móvil, tablet y escritorio.
-- Validar carga, errores, navegación y accesibilidad básica.
-- Configurar y probar el despliegue frontend en coordinación con el backend de Emilio.
-- Preparar capturas reales para README al terminar la práctica, según lo acordado por Emilio.
-- Actualizar README y `DOCUMENTACION.md` con los cambios del commit correspondiente.
-
-## Regla de documentación
-
-`DOCUMENTACION.md` es el registro técnico vivo del proyecto. Antes de cada commit, Rebo o su IA debe actualizarlo con:
-
-1. Cambios implementados.
-2. Archivos, rutas, componentes, variables o servicios afectados.
-3. Lógica, flujo y consideraciones de seguridad.
-4. Pruebas realizadas.
-5. Pendientes reales.
-
-Este archivo no sustituye al README: el README se orienta a instalar y ejecutar; `DOCUMENTACION.md` explica la arquitectura y lógica interna.
-
-Actualizar las secciones existentes cuando cambie un archivo o contrato; no repetir una sección por cada modificación. Mantener `CONTEXTO.md` sincronizado cuando cambien contratos, responsabilidades o decisiones que afecten a Rebo. El README solo describe tecnología, instalación, ejecución y funcionamiento actuales; no incluir roadmap, propuestas extra, despliegues previstos ni listas de tareas futuras. Pendientes y planificación pertenecen a este archivo y a `DOCUMENTACION.md`. Las capturas se incorporan al terminar la práctica; mientras no existan, indicar únicamente su ausencia actual, sin simular evidencia.
-
-## Reglas de seguridad y calidad
-
-- No subir `.env`, claves de Supabase, contraseñas, tokens JWT ni credenciales institucionales.
-- No colocar `SUPABASE_SECRET_KEY` en frontend ni variables con prefijo `VITE_`.
-- No registrar contraseñas ni tokens en consola, respuestas HTTP o archivos de log.
-- Usar TypeScript estricto y validar datos externos antes de procesarlos.
-- Mostrar errores claros al usuario, sin revelar detalles internos del servidor.
-- Mantener cargas, errores y estados vacíos en las pantallas que consuman APIs.
-- Agregar dependencias solo cuando estén justificadas y documentarlas.
-
-## Información para exposición
-
-Rebo explicará el frontend y la funcionalidad adicional. Debe poder explicar:
-
-- Por qué se eligió React + Vite + TypeScript.
-- Cómo las rutas protegidas impiden mostrar datos académicos sin sesión.
-- Por qué el navegador solo habla con el backend propio.
-- La funcionalidad adicional finalmente elegida y su valor concreto para el estudiante.
-
-Emilio explicará arquitectura general, backend, seguridad e integración con SII.
-
-## Instrucciones para trabajar con un agente de IA
-
-Al iniciar una tarea, Rebo puede entregar al agente este archivo y una solicitud precisa. El agente debe:
-
-1. Explicar las decisiones importantes antes de realizar una configuración significativa.
-2. Limitarse a la fase/tarea solicitada; no avanzar automáticamente a otras fases.
-3. Inspeccionar el estado actual antes de modificar archivos.
-4. Preservar cambios ajenos y evitar modificar archivos de Emilio salvo coordinación explícita.
-5. Actualizar `DOCUMENTACION.md` como parte del conjunto de cambios.
-6. Ejecutar verificaciones proporcionales, como `npm run check` o `npm run build`.
-7. No hacer commits, pushes, Pull Requests, merges ni despliegues.
-8. Entregar al final los comandos para que Rebo revise, agregue, confirme y publique su propia rama.
+Emilio presenta arquitectura, backend institucional, sesiones, cifrado, DTO y pruebas; Rebo presenta frontend y Centro de Préstamos/despliegue. Ambos deben explicar las limitaciones reales y no llamar autorización al ocultamiento de botones. Las correcciones de código requieren una solicitud posterior; esta tarea modifica solo documentación.
