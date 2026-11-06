@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { LayoutDashboard, BookOpen, Calendar, LogOut } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Calendar, LogOut, Package } from 'lucide-react';
 import styles from './Layout.module.css';
 
 const Layout = () => {
@@ -50,6 +50,14 @@ const Layout = () => {
           >
             <Calendar size={20} />
             <span>Horario</span>
+          </NavLink>
+
+          <NavLink 
+            to="/recursos" 
+            className={({ isActive }) => isActive ? `${styles.navItem} ${styles.activeNavItem}` : styles.navItem}
+          >
+            <Package size={20} />
+            <span>Recursos</span>
           </NavLink>
         </nav>
 

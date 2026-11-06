@@ -134,6 +134,13 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 3. **Lógica de Negocio Principal (Express):** El endpoint `POST /api/resources/reserve/:id` verifica primero el `available_stock`. Si es mayor a 0, aparta el recurso restando 1 al stock y genera el registro en `loans` con estado `pending_pickup` y una fecha de vencimiento calculada a 3 días.
 4. **Manejo de Fallos:** Si la inserción del préstamo falla, el servicio ejecuta un rollback manual que restaura el `available_stock` en Supabase para evitar discrepancias en el inventario.
 
+### Catálogo de Recursos (Frontend - Vista Estudiante) (`frontend/src/pages/Resources/`)
+1. **Problema que resuelve:** Permite al alumno explorar el inventario de la institución (libros, equipo de laboratorio, cubículos) y apartarlos sin tener que ir físicamente a preguntar por disponibilidad.
+2. **Por qué existe:** Para cumplir el requerimiento del profesor de diseñar una funcionalidad adicional que aporte valor real, y que a la vez separe la vista pública de un backend administrativo.
+3. **Entradas y salidas:** Consume el endpoint `GET /api/resources` para pintar el catálogo. Para reservar, extrae el número de control del alumno mediante `getStudentProfile()` y ejecuta `POST /api/resources/reserve/:id`. Si tiene éxito, el stock de la tarjeta se actualiza localmente para dar retroalimentación visual inmediata.
+4. **Pendiente:** Agregar la sección o pestaña de "Mis Préstamos" para que el estudiante consulte sus reservas activas y fechas límite.
+
+
 ### Pendiente
 
 - Rutas y componentes de interfaz.

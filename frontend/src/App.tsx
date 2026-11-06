@@ -5,6 +5,7 @@ import { Login } from './pages/Login/Login';
 import Dashboard from './pages/Dashboard/Dashboard';
 import Kardex from './pages/Kardex/Kardex';
 import Schedule from './pages/Schedule/Schedule';
+import Resources from './pages/Resources/Resources';
 import Layout from './components/Layout/Layout';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/kardex" element={<Kardex />} />
               <Route path="/horario" element={<Schedule />} />
+              <Route path="/recursos" element={<Resources />} />
             </Route>
           </Route>
           
