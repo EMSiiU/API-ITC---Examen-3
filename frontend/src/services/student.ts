@@ -1,4 +1,5 @@
-// Usamos la variable de entorno de Vite o un valor por defecto
+import { apiFetch } from './api';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export interface StudentProfile {
@@ -28,18 +29,13 @@ export interface StudentProfile {
 }
 
 export const getStudentProfile = async (): Promise<StudentProfile> => {
-  const response = await fetch(`${API_URL}/student/profile`, {
-    method: 'GET',
-    credentials: 'include', // Crucial para enviar la cookie de sesión
+  const response = await apiFetch(`${API_URL}/student/profile`, {
     headers: {
       'Content-Type': 'application/json',
     },
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('No autorizado');
-    }
     throw new Error('Error al obtener el perfil');
   }
 
