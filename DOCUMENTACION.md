@@ -98,6 +98,20 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 4. **Conexiones:** Utiliza `credentials: 'include'` para enviar la cookie. Será consumido por el Dashboard para mostrar los indicadores de avance.
 5. **Pendiente y consumidor futuro:** El Dashboard que Rebo está a punto de crear lo utilizará para inyectar nombre, foto y promedios.
 
+### Panel Principal (Dashboard) (`frontend/src/pages/Dashboard/`)
+1. **Problema que resuelve:** Ofrece un resumen visual inmediato del estado académico del estudiante (créditos, promedios, materias aprobadas/reprobadas y un Top 5 de mejores materias).
+2. **Por qué existe:** Para cumplir el requerimiento de un dashboard personalizado con indicadores visuales y colores de desempeño, mejorando la experiencia de usuario.
+3. **Entradas y salidas:** Consume los datos de perfil y kardex. Renderiza tarjetas informativas y gráficas interactivas mediante la librería `recharts`. Los colores del promedio son dinámicos según la calificación.
+4. **Conexiones:** Se renderiza dentro del componente `Layout` en la ruta `/dashboard`. Llama simultáneamente a los servicios `getStudentProfile` y `getStudentKardex`.
+5. **Pendiente y consumidor futuro:** La vista principal está terminada. Rebo pasará a construir las pantallas detalladas de Kardex y Horario en los siguientes pasos.
+
+### Servicio de Kardex (`frontend/src/services/kardex.ts`)
+1. **Problema que resuelve:** Conecta el frontend con el endpoint protegido de Kardex y adapta el tipado de los datos a la interfaz.
+2. **Por qué existe:** Para aislar la obtención de datos y asegurar que el frontend procese correctamente la estructura anidada (`{ kardex: { subjects } }`) y los valores `null` enviados por el DTO del backend.
+3. **Entradas y salidas:** Ejecuta `GET /student/kardex` y devuelve únicamente el arreglo `KardexSubject[]` para facilitar la iteración en React.
+4. **Conexiones:** Usa `credentials: 'include'` para la sesión. Actualmente es consumido por el Dashboard para extraer el Top 5 de materias.
+5. **Pendiente y consumidor futuro:** Rebo lo reutilizará como fuente de datos principal para la vista completa del historial académico en la próxima tarea (`feature/kardex-ui`).
+
 ### Pendiente
 
 - Rutas y componentes de interfaz.
