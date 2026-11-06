@@ -56,6 +56,13 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 4. **Conexiones:** Reemplaza la plantilla inicial de Vite. Es el componente raíz envuelto por `main.tsx`.
 5. **Pendiente y consumidor futuro:** Rebo implementará la protección de rutas con el contexto de sesión en los próximos pasos y diseñará las pantallas reales.
 
+### Capa de Servicios API - Autenticación (`frontend/src/services/auth.ts`)
+1. **Problema que resuelve:** Centraliza la comunicación con el backend para los flujos de login y verificación de sesión, evitando repetir código fetch en los componentes.
+2. **Por qué existe:** Para garantizar que todas las peticiones de autenticación incluyan estrictamente la configuración `credentials: 'include'`, vital para el manejo de cookies HTTP-only.
+3. **Entradas y salidas:** `login` recibe credenciales y devuelve datos del usuario o lanza un error. `checkSession` no recibe argumentos, verifica la validez de la cookie en el backend y devuelve el estado de la sesión.
+4. **Conexiones:** Se comunica directamente con los endpoints `POST /auth/login` y `GET /auth/session` del backend.
+5. **Pendiente y consumidor futuro:** Será consumido por el contexto global de sesión y la pantalla de Login que construirá Rebo en los siguientes pasos.
+
 ### Pendiente
 
 - Rutas y componentes de interfaz.
