@@ -77,6 +77,13 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 4. **Conexiones:** Consume el hook `useAuth` del `AuthContext`. Se implementa en `App.tsx` usando las rutas anidadas de React Router.
 5. **Pendiente y consumidor futuro:** Actualmente protege el Dashboard. Rebo lo usará para proteger Kardex, Calificaciones y Horario.
 
+### Interfaz de Login (`frontend/src/pages/Login/`)
+1. **Problema que resuelve:** Proporciona la interfaz visual segura (sin exponer JWT en local storage) para que los alumnos ingresen sus credenciales.
+2. **Por qué existe:** Para fusionar la identidad institucional (logos) con una UI moderna de pantalla dividida (split-screen), adaptándose a móviles y escritorio.
+3. **Entradas y salidas:** Recibe credenciales del usuario, muestra estados de carga/error, y tras un éxito, actualiza el `AuthContext` y redirige a `/dashboard`.
+4. **Conexiones:** Consume `authService.login()` y `useAuth().checkAuth()`. Utiliza CSS Modules puros para estilos encapsulados.
+5. **Pendiente y consumidor futuro:** Servirá como la puerta de entrada exclusiva a la app. Emilio no necesita intervenir aquí ya que consume el endpoint `POST /auth/login` directamente.
+
 ### Pendiente
 
 - Rutas y componentes de interfaz.
