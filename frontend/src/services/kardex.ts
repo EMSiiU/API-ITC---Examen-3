@@ -6,7 +6,7 @@ export interface KardexSubject {
   code: string | null;
   period: string | null;
   credits: number | null;
-  grade: number | string; 
+  grade: number | null; 
   gradeLabel: string | null;
   evaluationDescription: string | null;
   semester: string | null;

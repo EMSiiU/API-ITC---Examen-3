@@ -112,6 +112,13 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 4. **Conexiones:** Usa `credentials: 'include'` para la sesión. Actualmente es consumido por el Dashboard para extraer el Top 5 de materias.
 5. **Pendiente y consumidor futuro:** Rebo lo reutilizará como fuente de datos principal para la vista completa del historial académico en la próxima tarea (`feature/kardex-ui`).
 
+### Pantalla de Historial Académico (Kardex) (`frontend/src/pages/Kardex/`)
+1. **Problema que resuelve:** Permite al estudiante consultar la totalidad de su historial académico, facilitando la localización de materias específicas mediante un buscador y ordenamiento dinámico.
+2. **Por qué existe:** Para cumplir con el requerimiento de mostrar los resultados finales institucionales (Kardex) en una interfaz moderna y responsiva, prescindiendo de las pestañas redundantes del diseño original del SII.
+3. **Entradas y salidas:** Consume el servicio `getStudentKardex()`. Genera una tabla con búsqueda en tiempo real y ordenamiento ascendente/descendente (por columna) gestionados 100% en el cliente mediante `useMemo` para máxima optimización.
+4. **Conexiones:** Se renderiza dentro del componente `Layout` en la ruta `/kardex`. Utiliza el tipado `KardexSubject` y renderiza las calificaciones con *badges* de color.
+5. **Pendiente y consumidor futuro:** La vista de Kardex está completa. El siguiente paso de Rebo será construir la interfaz para el Horario (`feature/schedule-ui`).
+
 ### Pendiente
 
 - Rutas y componentes de interfaz.
