@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 // Componentes temporales (los mejoraremos y separaremos pronto)
 const LoginPlaceholder = () => <div style={{ padding: '2rem' }}><h1>Login</h1><p>En construcción...</p></div>;
@@ -6,18 +8,23 @@ const DashboardPlaceholder = () => <div style={{ padding: '2rem' }}><h1>Dashboar
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Ruta pública */}
-        <Route path="/login" element={<LoginPlaceholder />} />
-        
-        {/* Ruta privada (la protegeremos en el paso 3) */}
-        <Route path="/dashboard" element={<DashboardPlaceholder />} />
-        
-        {/* Redirección por defecto */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Rutas públicas */}
+          <Route path="/login" element={<LoginPlaceholder />} />
+          
+          {/* Rutas privadas */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/dashboard" element={<DashboardPlaceholder />} />
+            {/* Aquí irán después /kardex, /horario, etc. */}
+          </Route>
+          
+          {/* Redirección por defecto */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

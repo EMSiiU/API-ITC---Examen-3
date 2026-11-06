@@ -63,6 +63,20 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 4. **Conexiones:** Se comunica directamente con los endpoints `POST /auth/login` y `GET /auth/session` del backend.
 5. **Pendiente y consumidor futuro:** Será consumido por el contexto global de sesión y la pantalla de Login que construirá Rebo en los siguientes pasos.
 
+### Contexto Global de Autenticación (`frontend/src/context/AuthContext.tsx`)
+1. **Problema que resuelve:** Mantiene el estado de la sesión (`isAuthenticated`, `isLoading`) accesible para cualquier componente de la aplicación sin tener que pasar props (prop drilling).
+2. **Por qué existe:** Para que la UI reaccione globalmente a cambios de sesión y valide el acceso en el primer renderizado llamando al backend.
+3. **Entradas y salidas:** Provee un proveedor (`AuthProvider`) que envuelve la app y un hook (`useAuth`) para consumir los estados y la función `checkAuth`.
+4. **Conexiones:** Consume `authService.checkSession()` para confirmar el acceso real contra el backend de Emilio usando la cookie `httpOnly`.
+5. **Pendiente y consumidor futuro:** Será consumido por `ProtectedRoute` y, en el siguiente paso, por el formulario de Login para actualizar el estado tras iniciar sesión.
+
+### Protección de Rutas (`frontend/src/components/ProtectedRoute.tsx`)
+1. **Problema que resuelve:** Impide el acceso visual a rutas académicas si el usuario no cuenta con una cookie de sesión validada por el backend.
+2. **Por qué existe:** Para cumplir el requerimiento de redirigir al login al perder la sesión o intentar entrar directamente mediante URL.
+3. **Entradas y salidas:** Renderiza a sus rutas hijas (`<Outlet />`) si hay sesión. Retorna `<Navigate to="/login" />` si el usuario no está autenticado, o un mensaje de carga mientras verifica.
+4. **Conexiones:** Consume el hook `useAuth` del `AuthContext`. Se implementa en `App.tsx` usando las rutas anidadas de React Router.
+5. **Pendiente y consumidor futuro:** Actualmente protege el Dashboard. Rebo lo usará para proteger Kardex, Calificaciones y Horario.
+
 ### Pendiente
 
 - Rutas y componentes de interfaz.
