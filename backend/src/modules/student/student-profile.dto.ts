@@ -19,9 +19,11 @@ const numericValue = z
 
 const siiProfileSchema = z
     .object({
+        code: z.literal(200),
+        flag: z.union([z.literal(true), z.literal('success')]),
         data: z
         .object({
-            numero_control: textValue,
+            numero_control: z.string().trim().min(1),
             email: textValue,
             semestre: numericValue,
             creditos_acumulados: numericValue,

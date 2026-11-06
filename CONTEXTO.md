@@ -119,9 +119,12 @@ Para producción, la cookie debe usar `Secure=true`. Si frontend y backend se ma
 - `GET /student/profile`, protegido por sesión y conectado al endpoint real de perfil SII.
 - DTO `StudentProfile` que valida y normaliza la respuesta institucional mediante Zod antes de entregarla al frontend.
 - `GET /student/grades` protegido, conectado a SII y normalizado mediante `StudentGrades`. Emilio compartió la respuesta autenticada normalizada; se comprobó que coincide con el DTO. HTTP sin cookie devuelve `401`. Sus evaluaciones se presentan como parciales, no como finales.
-- `GET /student/kardex` protegido, conectado a SII y normalizado por `student-kardex.dto.ts`. La consulta real devolvió `200` en Postman antes de normalizar; el DTO pasó las pruebas con la respuesta completa adjunta. HTTP sin cookie devuelve `401`; falta confirmación explícita de la respuesta autenticada normalizada final.
+- `GET /student/kardex` protegido, conectado a SII y normalizado por `student-kardex.dto.ts`. El DTO pasó pruebas con la respuesta completa y el endpoint normalizado devolvió `200` en la prueba real posterior a la consolidación; sin cookie devuelve `401`.
 - `GET /student/schedule` protegido, consulta institucional y DTO `StudentSchedule`. El doble envío del controlador fue corregido; Emilio confirmó que sigue funcionando y la prueba HTTP sin cookie devuelve `401`.
 - CORS restringido a `FRONTEND_ORIGIN`, con credenciales habilitadas.
+- Las cookies malformadas se rechazan antes de la base de datos. Logout borra la cookie aun si falla la revocación; en ese fallo devuelve `500` sin afirmar que cerró la sesión de servidor.
+- Mutaciones de origen ajeno producen `403`; cuerpos JSON inválidos/grandes producen `400/413` JSON y rutas inexistentes, `404` JSON. Las respuestas de éxito no cambian.
+- Batería versionada: `npm test --workspace=backend`, con 102/102 comprobaciones aisladas. También pasaron `check` y `build`.
 
 Detalles de integración confirmados que Rebo no debe sustituir ni exponer:
 
@@ -129,7 +132,7 @@ Detalles de integración confirmados que Rebo no debe sustituir ni exponer:
 - El endpoint propio de perfil responde `200 { profile: StudentProfile }`. El contrato actual usa `profile.controlNumber`, `profile.email`, `profile.semester`, `profile.photoUrl`, `profile.academicProgress`, `profile.averages` y `profile.subjects`. Ya no devuelve `profile.data`.
 - El frontend debe enviar `credentials: 'include'` y nunca administrar tokens institucionales.
 
-Contrato del perfil normalizado; todos los valores hoja pueden ser `null` si faltan en la respuesta institucional:
+Contrato del perfil normalizado: los campos opcionales ausentes se representan con `null`. El parser exige ahora envoltura de éxito y número de control no vacío como identidad mínima; el tipo `controlNumber: string | null` se conserva por compatibilidad con consumidores. Los demás valores hoja pueden ser `null`:
 
 | Objeto | Campos |
 |---|---|
@@ -162,7 +165,9 @@ Contrato de horario implementado: `200 { schedule: { periods: [...] } }`. Cada p
 
 El DTO de horario pasó pruebas aisladas de días, horas y valores nulos. Emilio corrigió la respuesta duplicada de `getSchedule` y confirmó que sigue funcionando. La revisión constató un solo envío y `npm run check` pasó. También se verificó por HTTP `401` sin cookie en los cuatro endpoints académicos, sin usar credenciales institucionales.
 
-Siguiente tarea de Emilio tras cerrar horario: consolidar el backend y entregar los contratos a Rebo; revisar expiración/revocación de sesión, errores institucionales y configuración de producción con pruebas proporcionales, sin asumir que esos casos ya están cubiertos. Rebo construye todo el frontend, incluidos dashboard y Kardex, reutilizando los contratos disponibles. El frontend local revisado sigue siendo la plantilla Vite; revisar cualquier avance de Rebo en otra rama antes de modificar archivos compartidos. Ambos deben elegir la función extra, que liderará Rebo con apoyo de Emilio. No comenzar automáticamente otra fase.
+Consolidación completada para los casos cubiertos: 102 pruebas aisladas de sesión, errores, cifrado, origen y configuración, más una prueba real autorizada con SII y Supabase. Login, sesión y los cuatro recursos devolvieron `200`; logout `204`; reutilizar la cookie tras logout, `401`. Se creó y revocó solo la sesión de esa prueba, sin registrar secretos ni datos académicos. Los tests aislados no acceden a servicios reales ni al `.env` del equipo.
+
+Siguientes pendientes de Emilio: esquema SQL reproducible, configuración de despliegue, comprobación en navegador con dominios reales, revisión de límites de intentos y latencia/reintentos de Supabase. Rebo puede construir todo el frontend con los mismos DTO y contratos; el navegador debe usar el origen configurado y `credentials: 'include'`. No agregar excepciones de origen para evitar un `403`: corregir `FRONTEND_ORIGIN` si cambian los puertos. Postman/comandos sin Origin, Referer o metadatos cross-site siguen funcionando. Ambos deben elegir la función extra liderada por Rebo; no comenzar automáticamente otra fase.
 
 Rebo debe partir de `main` actualizado y verificar que los Pull Requests de Emilio estén fusionados antes de conectar el frontend. Puede crear módulos backend propios de la función extra que lidere, coordinando su diseño; no debe alterar los módulos institucionales o de sesiones de Emilio sin coordinación.
 
@@ -216,6 +221,7 @@ npm run dev:frontend
 npm run dev:backend
 npm run build
 npm run check
+npm test --workspace=backend
 ```
 
 Direcciones locales esperadas:
@@ -235,7 +241,7 @@ Los endpoints de autenticación, perfil, Kardex, calificaciones y horario están
 | `POST /auth/logout` | Cookie de sesión | Revoca sesión, elimina cookie y devuelve `204` | Emilio |
 | `GET /student/profile` | Cookie de sesión | `200 { profile: StudentProfile }` normalizado | Emilio |
 | `GET /student/grades` | Cookie de sesión | `200 { grades: StudentGrades }`; períodos, materias y evaluaciones normalizadas | Emilio |
-| `GET /student/kardex` | Cookie de sesión | `200 { kardex: StudentKardex }` normalizado; confirmación HTTP final pendiente | Emilio |
+| `GET /student/kardex` | Cookie de sesión | `200 { kardex: StudentKardex }` normalizado y comprobado en flujo real | Emilio |
 | `GET /student/schedule` | Cookie de sesión | `200 { schedule: StudentSchedule }`; `401` sin cookie | Emilio |
 | Rutas de funcionalidad adicional | Por definir | Por definir tras seleccionar propuesta | Rebo lidera, Emilio apoya y revisa |
 

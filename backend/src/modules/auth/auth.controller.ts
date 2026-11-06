@@ -16,6 +16,7 @@ import {
     clearSessionCookieOptions,
     sessionCookieOptions,
 } from './session-cookie.js';
+import { isSessionId } from './session-id.js';
 
 const loginBodySchema = z.object({
     email: z.string().email(),
@@ -110,12 +111,14 @@ export async function logout(
 ): Promise<void> {
     const sessionId = request.cookies[env.SESSION_COOKIE_NAME];
 
+    // Clearing the browser cookie must not depend on database availability.
+    clearSessionCookie(response);
+
     try {
-        if (typeof sessionId === 'string' && sessionId.length > 0) {
+        if (isSessionId(sessionId)) {
         await revokeSession(sessionId);
         }
 
-        clearSessionCookie(response);
         response.status(204).send();
     } catch {
         sendInternalError(response);

@@ -44,13 +44,15 @@ El proyecto cuenta con monorepo, autenticación real contra SII ITC mediante bac
 - Endpoint protegido `GET /student/grades`, con consulta real de calificaciones y normalización a `StudentGrades` por períodos, materias y evaluaciones.
 - Ruta `GET /student/schedule`, consulta institucional de horario y DTO `StudentSchedule`; respuesta duplicada corregida y funcionamiento autenticado confirmado por Emilio.
 - Prueba HTTP local: las cuatro rutas académicas devuelven `401` sin cookie.
+- Validación UUID de cookies, logout que borra cookie aun si falla la revocación, protección de origen en mutaciones y errores JSON uniformes.
+- Batería versionada de regresión: 102/102 comprobaciones; `check` y `build` correctos.
+- Prueba real posterior a las correcciones: login, sesión y los cuatro recursos `200`; logout `204`; reutilización de sesión `401`. Solo se creó y revocó la sesión de esa prueba, sin eliminar historial ni registrar secretos.
 - Compilación y validación de tipos exitosas.
 
 ### Pendiente
 
 - Rutas y componentes de interfaz.
 - Implementar en la interfaz el criterio acordado de parciales actuales y finales históricos, distinguiendo notas ausentes de cero.
-- Comprobación manual final de la respuesta normalizada de Kardex en Postman; el rechazo sin cookie ya está verificado.
 - Dashboard y pantallas frontend.
 - Seleccionar y justificar la funcionalidad adicional de impacto; el planificador es solo una propuesta por ahora.
 - Pruebas, despliegue en Render y documentación visual.
@@ -121,11 +123,13 @@ La tabla tiene RLS habilitado. Los roles `anon` y `authenticated` no tienen perm
 │   │   ├── app.ts             # Configuración de Express, CORS y middleware
 │   │   ├── server.ts          # Inicio del servidor HTTP
 │   │   ├── config/env.ts      # Validación y lectura de variables de entorno
+│   │   ├── middleware/       # Origen de mutaciones y errores JSON
 │   │   └── modules/
 │   │       ├── auth/            # Sesión, cifrado, controladores y middleware
 │   │       ├── sii/             # Cliente exclusivo de SII ITC
 │   │       └── student/         # Endpoints académicos protegidos
 │   ├── .env.example           # Plantilla sin secretos
+│   ├── tests/backend.regression.mjs # HTTP real local con dependencias aisladas
 │   ├── package.json
 │   └── tsconfig.json
 ├── .gitignore
@@ -217,11 +221,23 @@ Este módulo define las opciones que `auth.controller.ts` aplica al emitir la co
 
 **Por qué existe:** concentra la política de acceso en una sola función reutilizable. Esto reduce el riesgo de que una ruta académica futura olvide validar sesión antes de consultar datos institucionales.
 
-**Entradas y salidas:** recibe una petición que debe incluir la cookie definida por `SESSION_COOKIE_NAME`. Si no existe, está revocada o venció, borra la cookie y responde `401`. Si es válida, adjunta un `ActiveSession` interno a `request.authSession`, actualiza `last_seen_at` y entrega el control al siguiente controlador. Ante un fallo de infraestructura responde `500` sin exponer detalles.
+**Entradas y salidas:** recibe una petición que debe incluir la cookie definida por `SESSION_COOKIE_NAME`. Si falta, no es un UUID válido, está revocada o venció, borra la cookie y responde `401`. Un formato malformado se rechaza antes de consultar Supabase o SII. Si es válida, adjunta un `ActiveSession` interno a `request.authSession`, actualiza `last_seen_at` y entrega el control al siguiente controlador. Ante un fallo de infraestructura responde `500` sin exponer detalles.
 
-**Conexiones:** usa `session.repository.ts` para recuperar y tocar la sesión, `session-cookie.ts` para borrar la cookie con los mismos atributos y `env.ts` para conocer el nombre de cookie. Los controladores posteriores obtienen la sesión validada mediante `getAuthenticatedSession`.
+**Conexiones:** usa `isSessionId` de `session-id.ts` antes del repositorio, `session.repository.ts` para recuperar y tocar la sesión, `session-cookie.ts` para borrar la cookie con los mismos atributos y `env.ts` para conocer el nombre de cookie. Los controladores posteriores obtienen la sesión validada mediante `getAuthenticatedSession`.
 
 **Pendiente y consumidor futuro:** actualmente protege `GET /auth/session`, `GET /student/profile`, `GET /student/kardex`, `GET /student/grades` y `GET /student/schedule`. Se reutilizará en las rutas privadas de la funcionalidad adicional seleccionada.
+
+### `backend/src/modules/auth/session-id.ts`
+
+**Problema que resuelve:** impide que una cookie manipulada con valor no UUID llegue a una columna PostgreSQL UUID y provoque un error de infraestructura en vez de rechazo de sesión.
+
+**Por qué existe:** comparte una sola validación Zod entre el middleware de acceso y logout.
+
+**Entradas y salidas:** `isSessionId(value: unknown): value is string` devuelve un booleano con estrechamiento de tipo usando `z.uuid().safeParse`; no lanza un error por entrada inválida ni concede autenticación por sí sola.
+
+**Conexiones:** lo usan `requireAuthenticatedSession` y `logout` antes de consultar o revocar. Una cookie UUID válida todavía requiere la comprobación de existencia, expiración y revocación en el repositorio.
+
+**Pendiente y consumidor futuro:** los futuros consumidores de cookies de sesión deben reutilizarlo; Rebo recibe los mismos contratos HTTP existentes.
 
 ### `backend/src/modules/auth/token-crypto.ts`
 
@@ -318,7 +334,7 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 |---|---|---|---|
 | `login` | JSON `{ email, password }` | `200 { authenticated: true }`; `400`, `401`, `502`, `503` o `500` en error | Pide autenticación al servicio; en éxito establece la cookie con el ID de sesión. |
 | `getSession` | Sesión previamente validada por middleware | `200 { authenticated: true }` | No consulta ni expone el JWT; usa la sesión interna ya adjuntada a la petición. |
-| `logout` | Cookie de sesión opcional | `204` o `500` | Revoca la sesión existente y elimina la cookie en el navegador. |
+| `logout` | Cookie de sesión opcional | `204` o `500` | Siempre elimina la cookie; solo intenta revocar un ID UUID válido. Si falla Supabase mantiene `500`, sin afirmar que la sesión de servidor fue revocada. Sin cookie o con formato inválido devuelve `204` sin consultar la base. |
 | `clearSessionCookie` | Objeto `Response` | No devuelve cuerpo | Expira la cookie usando los mismos atributos de seguridad. |
 | `sendSiiError` | Error interno `SiiApiError` | `401`, `502` o `503` con mensaje seguro | Oculta detalles de red y respuesta de SII ITC. |
 
@@ -334,9 +350,33 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 
 **Entradas y salidas:** recibe las solicitudes cuyo path inicia con `/auth` o `/student` y las delega al router correspondiente. No produce respuestas propias para esas rutas; cada controlador decide su respuesta.
 
-**Conexiones:** se ejecuta después de CORS, JSON y `cookieParser`, por lo que los routers reciben cuerpos JSON y cookies ya procesados. Conecta `app.ts` con `auth.routes.ts` y `student.routes.ts`.
+**Conexiones:** el orden es CORS, `requireTrustedMutationOrigin`, JSON limitado a 16 KB, `cookieParser`, routers y salud, fallback JSON `404`, y `apiErrorHandler` al final. La protección de mutaciones se aplica antes de parsear cuerpos o ejecutar acciones; los routers reciben cookies y JSON ya procesados.
 
 **Pendiente y consumidor futuro:** es la base de todos los clientes frontend y de las pruebas manuales de API. Los routers de autenticación y los cuatro recursos académicos ya están montados; el módulo de la función adicional se integrará cuando sea elegido y diseñado.
+
+### `backend/src/middleware/request-origin.middleware.ts`
+
+**Problema que resuelve:** CORS limita lectura en navegador pero no impide por sí mismo que una solicitud altere una sesión. Este middleware rechaza mutaciones con origen ajeno antes de login/logout u otras acciones.
+
+**Por qué existe:** concentra la política de origen, independiente de cada controlador. Se basa en comparación exacta de origen, conforme a [OWASP sobre verificación de origen](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html).
+
+**Entradas y salidas:** `requireTrustedMutationOrigin` recibe una petición Express. `safeMethods` permite `GET`, `HEAD` y `OPTIONS`; para otros métodos compara `Origin` con `new URL(FRONTEND_ORIGIN).origin`, rechazando también `null` y dominios parecidos. Sin Origin verifica Referer si existe; sin ambos rechaza `Sec-Fetch-Site: cross-site`. Origen ajeno o Referer inválido produce `403` JSON; el permitido llama a `next()`.
+
+**Conexiones:** `app.ts` lo monta antes del parser y routers; CORS usa el mismo origen normalizado. Las herramientas sin encabezados de navegador, como Postman y comandos locales, siguen admitidas. Rebo no necesita inventar un token CSRF ni enviar una cabecera adicional para el flujo actual: su navegador envía Origin y su cliente debe incluir la cookie.
+
+**Pendiente y consumidor futuro:** verificar cookies y esta política en navegador con los dominios reales de producción. No equivale a autenticación ni protección contra clientes capaces de falsificar cabeceras, ni sustituye validación de sesión, TLS o límites de intentos. No se ha realizado una prueba de navegador en Render.
+
+### `backend/src/middleware/error-handler.middleware.ts`
+
+**Problema que resuelve:** evita respuestas HTML/stack inesperadas en una API JSON ante cuerpos inválidos, grandes o errores no controlados.
+
+**Por qué existe:** ofrece un cierre uniforme del pipeline de Express para que Rebo pueda procesar errores sin depender del entorno. Sigue el patrón de [middleware de errores de Express](https://expressjs.com/en/guide/error-handling/).
+
+**Entradas y salidas:** `parserErrorType(error: unknown)` extrae de forma defensiva `type`; `apiErrorHandler` traduce `entity.parse.failed` a `400` y `entity.too.large` a `413`, con mensajes constantes. Otros errores producen `500` JSON sin serializar el error ni cuerpo recibido. Si `headersSent` ya es verdadero delega con `next(error)` sin intentar responder dos veces.
+
+**Conexiones:** se registra después de todas las rutas y del fallback JSON `404` en `app.ts`. Complementa el manejo específico de errores SII que ya hacen los controladores.
+
+**Pendiente y consumidor futuro:** Rebo puede tratar los errores de API como JSON `{ message }`; nuevas categorías de error deben mapearse explícitamente si se incorporan, sin devolver mensajes internos.
 
 ### `backend/src/modules/student/student.routes.ts`
 
@@ -360,6 +400,8 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 
 **Conexiones:** obtiene `siiToken` desde `getAuthenticatedSession`, consulta `getStudentProfile` en `sii.client.ts`, normaliza los datos con `student-profile.dto.ts` y, en caso de token inválido, usa `revokeSession` y `clearSessionCookieOptions`.
 
+En `getProfile`, la cookie se borra antes de intentar revocar una sesión institucional rechazada. Si falla la revocación se devuelve `500` JSON controlado, igual que en Kardex/calificaciones/horario; ya no se propaga ese fallo al manejador HTML predeterminado ni queda intacta la cookie del navegador.
+
 `getKardex(request, response): Promise<void>` recibe una petición autorizada por middleware, obtiene `session.siiToken`, consulta `getStudentKardex` y normaliza con `parseStudentKardex`. Devuelve `200 { kardex: StudentKardex }`. Un `ZodError` o JSON inválido produce `502`; una sesión institucional rechazada limpia la cookie, intenta revocar la sesión local y produce `401` (o `500` si falla esa revocación); indisponibilidad SII produce `503` y otros errores, `500`. Envía cada respuesta y termina con `return;` cuando corresponde para respetar `Promise<void>`. No persiste el historial ni devuelve la respuesta cruda institucional.
 
 `getGrades(request, response): Promise<void>` obtiene la sesión del middleware, consulta `getStudentGrades(session.siiToken)` y transforma el JSON mediante `parseStudentGrades`. Devuelve `200 { grades: StudentGrades }`. `ZodError` y JSON inválido producen `502`; sesión institucional rechazada limpia la cookie y revoca la sesión antes de `401` (si falla la revocación, `500`); indisponibilidad produce `503` y otros errores, `500`. No calcula promedios ni asigna una nota final.
@@ -374,7 +416,7 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 
 **Por qué existe:** valida la forma mínima del perfil recibido desde SII y lo adapta a un contrato interno `StudentProfile` con nombres consistentes y agrupaciones útiles para el dashboard.
 
-**Entradas y salidas:** `parseStudentProfile(rawProfile)` recibe `unknown`, valida `rawProfile.data` con Zod y devuelve `StudentProfile`. Convierte números enviados como texto a `number` y representa datos ausentes como `null`. Si la estructura no cumple el contrato, lanza `ZodError`, que el controlador traduce a `502`.
+**Entradas y salidas:** `parseStudentProfile(rawProfile)` recibe `unknown` y exige una envoltura de éxito (`code: 200`, `flag: true` o `'success'`) y `data.numero_control` como texto no vacío. Esto evita aceptar un error institucional con `data: {}` como perfil exitoso. Valida los otros campos con Zod y devuelve el mismo `StudentProfile`; los datos opcionales ausentes siguen como `null` y los números en texto se convierten a `number`. El contrato TypeScript conserva `controlNumber: string | null` por compatibilidad, aunque el parser ahora exige la identidad mínima no vacía. Si la estructura no cumple el contrato, lanza `ZodError`, que el controlador traduce a `502`. El éxito se corroboró después con SII real.
 
 **Conexiones:** lo invoca `student.controller.ts` inmediatamente después de `getStudentProfile`; no llama a la base de datos, no conoce cookies ni expone el JWT de SII.
 
@@ -392,7 +434,7 @@ Orquesta el flujo de inicio de sesión del lado servidor:
 
 **Conexiones:** `getKardex` lo invoca después de `getStudentKardex`; no accede a cookies, JWT ni Supabase. El JSON propio es `{ kardex: { progressPercentage, subjects } }`, sin `kardex.data` ni la envoltura `code/message/flag` institucional.
 
-**Pendiente y consumidor futuro:** Rebo usará este contrato para la pantalla estructurada del historial, con el resultado final institucional de cada registro de materia/período e intento. Debe mostrar `gradeLabel` y distinguir notas numéricas de textuales al colorear; no se asigna una equivalencia numérica a `AC`. Falta confirmación explícita de la consulta autenticada normalizada final; el rechazo sin cookie ya se comprobó por HTTP.
+**Pendiente y consumidor futuro:** Rebo usará este contrato para la pantalla estructurada del historial, con el resultado final institucional de cada registro de materia/período e intento. Debe mostrar `gradeLabel` y distinguir notas numéricas de textuales al colorear; no se asigna una equivalencia numérica a `AC`. La consulta autenticada normalizada final ya devolvió `200` en la prueba real posterior a las correcciones y el rechazo sin cookie también está comprobado.
 
 **Validación de este conjunto:** `npm run check` pasó. Se ejecutó el DTO real contra el JSON adjunto sin guardar datos personales en el repositorio: conservó los 50 registros, códigos, períodos y créditos, y convirtió `AC` a etiqueta con número `null`. También se verificó el rechazo de envoltura inválida, `flag: false` y créditos vacíos, y la aceptación de un historial vacío. Emilio confirmó previamente `200` de la consulta institucional en Postman; esa prueba fue anterior a la normalización.
 
@@ -438,6 +480,20 @@ Crea un cliente de Supabase para uso exclusivo del backend. Se inicializa con `S
 
 La llave de servidor puede evitar RLS, por lo que este cliente no puede llegar al frontend ni recibir tokens o encabezados controlados por el usuario.
 
+### `backend/tests/backend.regression.mjs`
+
+**Problema que resuelve:** reproduce errores difíciles de provocar con cuentas reales y verifica que no reaparezcan al cambiar el backend.
+
+**Por qué existe:** es una batería versionada y ejecutable con `npm test --workspace=backend`, sin instalar dependencias adicionales; usa `tsx` existente y `node:assert/strict`. `backend/package.json` define el script `test`.
+
+**Entradas y salidas:** configura variables ficticias, una llave efímera y una ruta dotenv inexistente; no lee `.env` real. `reset` reinicia escenario/contadores, `seed` prepara filas cifradas en memoria, el interceptor `fetch` representa SII/PostgREST y bloquea destinos externos, `call` envía HTTP a Express en un puerto local efímero y comprueba que no haya secretos ficticios en respuestas, y `test` registra cada expectativa sin parar en la primera. El resumen final reporta 102 casos y el proceso sale con código no cero si alguno falla. Subprocesos aislados comprueban configuración de producción. Libera servidor y restaura el interceptor al terminar.
+
+**Conexiones:** importa la aplicación real y su cifrado/DTO, sustituyendo solo conexiones salientes por dobles controlados. El caso de ciclo completo llama a login, usa la cookie recién creada, consulta sesión y los cuatro recursos, cierra sesión y verifica `401` al reutilizarla. Incluye UUID inválido, expiración/revocación, fallos SII/DB, perfil de error, JSON inválido/grande, origen/Referer/metadatos, preflight, cifrado y configuración.
+
+**Pendiente y consumidor futuro:** Emilio y Rebo deben repetirla cuando modifiquen esos contratos. No prueba SQL/RLS real, concurrencia, carga, navegador ni Render. No sustituye los endpoints obligatorios por datos simulados en producción. El error API de base de datos inyectado es no reintentable para evitar mezclar latencia de reintentos con manejo funcional; caracterizar caídas/reintentos reales sigue pendiente.
+
+**Resultado y prueba real complementaria:** 102/102 casos pasaron, además de `npm run check` y `npm run build`. Con autorización explícita se ejecutó por separado una prueba contra SII y Supabase reales: `/auth/login`, `/auth/session`, `/student/profile`, `/student/kardex`, `/student/grades` y `/student/schedule` devolvieron `200`; `/auth/logout` devolvió `204` y reutilizar esa cookie en `/auth/session` devolvió `401`. Se creó una nueva fila de sesión y se revocó al finalizar; no se borraron filas ni se alteraron datos académicos. Credenciales recibidas por entrada estándar con eco desactivado; solo se registraron rutas y estados, sin valores personales, token o cookie. El script puntual está fuera del repositorio; no contiene credenciales incrustadas.
+
 ## Variables de entorno
 
 Todas las variables reales se configuran en `backend/.env` local o en el panel de Render. Ese archivo no se debe confirmar. `backend/.env.example` solo contiene valores seguros de ejemplo.
@@ -474,6 +530,7 @@ Desde la raíz del monorepo:
 | `npm run dev:backend` | Ejecuta Express con recarga de TypeScript. |
 | `npm run build` | Compila frontend y backend para producción. |
 | `npm run check` | Ejecuta lint del frontend y verificación de tipos del backend. |
+| `npm test --workspace=backend` | Ejecuta la batería HTTP aislada de regresión del backend. |
 
 Prueba local actual:
 
@@ -578,10 +635,10 @@ feature/backend-validation
 
 ## Próximo cambio previsto
 
-Perfil, Kardex, calificaciones y horario disponen de DTO. El controlador de horario ya tiene un solo envío; Emilio confirmó su funcionamiento autenticado. `npm run check` pasó tras la corrección y una prueba HTTP local sobre la aplicación real confirmó `401` sin cookie en `/student/profile`, `/student/kardex`, `/student/grades` y `/student/schedule`, sin realizar login institucional ni consultas autenticadas a SII desde el agente.
+Perfil, Kardex, calificaciones y horario disponen de DTO. El controlador de horario ya tiene un solo envío. Tras las correcciones de sesiones y errores se ejecutó por el agente un ciclo real autorizado contra SII y Supabase, además de las pruebas aisladas; ambos alcances están detallados en la sección de regresiones. No se conservaron credenciales ni respuestas académicas en el repositorio.
 
-La siguiente tarea de Emilio será consolidar y entregar el backend: revisar casos de sesión inválida, expirada y revocada, errores de SII y configuración de producción con pruebas proporcionales. La comprobación sin cookie ya existe; no se deben dar por probados los demás casos sin evidencia. Rebo implementa todo el frontend (incluidos dashboard y Kardex) y lidera la función extra, aún pendiente de elección conjunta, con apoyo técnico de Emilio. Revisar avances de Rebo en otras ramas antes de modificar código compartido. Ambos coordinan integración y demostración, sin avanzar automáticamente a otra fase.
+La consolidación de sesiones y errores ya se probó con 102 casos aislados y un ciclo real completo. Los ocho casos inicialmente no cumplidos están corregidos y cubiertos por regresiones. Antes de considerar producción lista, faltan configuración y prueba de navegador en Render, caracterización de fallos prolongados/reintentos de Supabase, revisión de límites de intentos y esquema SQL reproducible. Rebo puede conectar todo el frontend con los contratos existentes; debe respetar el origen configurado y `credentials: 'include'`. La función extra sigue pendiente de elección conjunta, con liderazgo de Rebo y apoyo de Emilio. No se realizan commits, cambios de rama ni despliegues por el agente.
 
 ### Mantenimiento de los documentos Markdown
 
-`README.md` describe exclusivamente tecnología, funcionamiento, requisitos, instalación y ejecución actuales. Cumple esos dos apartados del PDF; las capturas aún no están incorporadas, por lo que ese tercer apartado no se considera completo. El README no contiene roadmap, propuestas ni despliegues futuros; las capturas reales se incorporan al terminar la práctica conforme a lo solicitado por Emilio. `frontend/README.md` remite a la guía principal y documenta la base React/Vite/TypeScript actual, en lugar de instrucciones genéricas de la plantilla. `CONTEXTO.md` concentra reparto, coordinación y guía para agentes; este archivo conserva explicaciones técnicas y pendientes. Esta actualización es documental: no modifica DTO, algoritmos académicos, dependencias ni código de aplicación.
+`README.md` describe exclusivamente tecnología, funcionamiento, requisitos, instalación y ejecución actuales. Cumple esos dos apartados del PDF; las capturas aún no están incorporadas, por lo que ese tercer apartado no se considera completo. El README no contiene roadmap, propuestas ni despliegues futuros; las capturas reales se incorporan al terminar la práctica conforme a lo solicitado por Emilio. `frontend/README.md` remite a la guía principal y documenta la base React/Vite/TypeScript actual, en lugar de instrucciones genéricas de la plantilla. `CONTEXTO.md` concentra reparto, coordinación y guía para agentes; este archivo conserva explicaciones técnicas y pendientes. Las correcciones actuales cambian validación de sesión/perfil y manejo HTTP, sin modificar el criterio académico ni agregar dependencias.

@@ -11,6 +11,7 @@ import {
   type ActiveSession,
 } from './session.repository.js';
 import { clearSessionCookieOptions } from './session-cookie.js';
+import { isSessionId } from './session-id.js';
 
 export interface AuthenticatedRequest extends Request {
   authSession?: ActiveSession;
@@ -35,7 +36,7 @@ export async function requireAuthenticatedSession(
 ): Promise<void> {
   const sessionId = request.cookies[env.SESSION_COOKIE_NAME];
 
-  if (typeof sessionId !== 'string' || sessionId.length === 0) {
+  if (!isSessionId(sessionId)) {
     response.clearCookie(
       env.SESSION_COOKIE_NAME,
       clearSessionCookieOptions,
