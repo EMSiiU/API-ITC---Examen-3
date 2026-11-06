@@ -2,11 +2,11 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login/Login';
-import Dashboard from "./pages/Dashboard/Dashboard";
+import Dashboard from './pages/Dashboard/Dashboard';
+import Kardex from './pages/Kardex/Kardex';
 import Layout from './components/Layout/Layout';
 
 // Componentes temporales para las páginas que faltan
-const KardexPlaceholder = () => <h1>Kardex</h1>;
 const HorarioPlaceholder = () => <h1>Horario</h1>;
 
 function App() {
@@ -21,7 +21,7 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/kardex" element={<KardexPlaceholder />} />
+              <Route path="/kardex" element={<Kardex />} />
               <Route path="/horario" element={<HorarioPlaceholder />} />
             </Route>
           </Route>
