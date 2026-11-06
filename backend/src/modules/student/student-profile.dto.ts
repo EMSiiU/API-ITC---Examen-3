@@ -24,6 +24,7 @@ const siiProfileSchema = z
         data: z
         .object({
             numero_control: z.string().trim().min(1),
+            persona: textValue,
             email: textValue,
             semestre: numericValue,
             creditos_acumulados: numericValue,
@@ -46,6 +47,7 @@ const siiProfileSchema = z
 
 export type StudentProfile = {
     controlNumber: string | null;
+    name: string | null;
     email: string | null;
     semester: number | null;
     photoUrl: string | null;
@@ -74,6 +76,7 @@ export function parseStudentProfile(rawProfile: unknown): StudentProfile {
 
     return {
         controlNumber: data.numero_control,
+        name: data.persona,
         email: data.email,
         semester: data.semestre,
         photoUrl: data.foto,

@@ -124,24 +124,24 @@ Para producción, la cookie debe usar `Secure=true`. Si frontend y backend se ma
 - CORS restringido a `FRONTEND_ORIGIN`, con credenciales habilitadas.
 - Las cookies malformadas se rechazan antes de la base de datos. Logout borra la cookie aun si falla la revocación; en ese fallo devuelve `500` sin afirmar que cerró la sesión de servidor.
 - Mutaciones de origen ajeno producen `403`; cuerpos JSON inválidos/grandes producen `400/413` JSON y rutas inexistentes, `404` JSON. Las respuestas de éxito no cambian.
-- Batería versionada: `npm test --workspace=backend`, con 102/102 comprobaciones aisladas. También pasaron `check` y `build`.
+- Batería versionada: `npm test --workspace=backend`, con 107/107 comprobaciones aisladas. También pasaron `check` y `build`.
 
 Detalles de integración confirmados que Rebo no debe sustituir ni exponer:
 
 - El JWT de login SII existe en `message.login.token`, pero solo lo procesa el backend.
-- El endpoint propio de perfil responde `200 { profile: StudentProfile }`. El contrato actual usa `profile.controlNumber`, `profile.email`, `profile.semester`, `profile.photoUrl`, `profile.academicProgress`, `profile.averages` y `profile.subjects`. Ya no devuelve `profile.data`.
+- El endpoint propio de perfil responde `200 { profile: StudentProfile }`. El contrato actual usa `profile.controlNumber`, `profile.name`, `profile.email`, `profile.semester`, `profile.photoUrl`, `profile.academicProgress`, `profile.averages` y `profile.subjects`. Ya no devuelve `profile.data`.
 - El frontend debe enviar `credentials: 'include'` y nunca administrar tokens institucionales.
 
 Contrato del perfil normalizado: los campos opcionales ausentes se representan con `null`. El parser exige ahora envoltura de éxito y número de control no vacío como identidad mínima; el tipo `controlNumber: string | null` se conserva por compatibilidad con consumidores. Los demás valores hoja pueden ser `null`:
 
 | Objeto | Campos |
 |---|---|
-| `profile` | `controlNumber`, `email` y `photoUrl`: texto; `semester`: número |
+| `profile` | `controlNumber`, `name`, `email` y `photoUrl`: texto; `semester`: número |
 | `profile.academicProgress` | `accumulatedCredits`, `complementaryCredits`, `progressPercentage`, `progressWhileEnrolledPercentage`: números |
 | `profile.averages` | `weighted`, `arithmetic`: números |
 | `profile.subjects` | `taken`, `passed`, `failed`, `failedNotAccredited`, `failedFirstAttempt`, `failedSecondAttempt`: números |
 
-El DTO convierte números recibidos como texto a `number`; el frontend debe distinguir `null` de cero. Una estructura incompatible produce `502` mediante el controlador. El campo institucional `persona` todavía no se expone: falta confirmar su estructura antes de incorporar el nombre al dashboard.
+El DTO convierte números recibidos como texto a `number`; el frontend debe distinguir `null` de cero. Una estructura incompatible produce `502` mediante el controlador. Se confirmó que `data.persona` institucional es texto y ahora se expone como `profile.name: string | null`, quitando espacios exteriores sin modificar acentos ni capitalización. Rebo debe añadir `name` al tipo frontend y puede usarlo en dashboard/encabezado; si es `null`, mostrar un texto neutral. Ausencia y `null` se conservan como `null`; un objeto o texto vacío se rechaza con `502`. No se devuelve `persona` crudo ni se incluyen nombres reales en fixtures o logs.
 
 Validaciones realizadas: compilación backend y prueba aislada del DTO con datos válidos e inválidos; flujo manual con SII real (`health=200`, `login=200`, `profile=200`, `logout=204`); `npm run check` pasó en la revisión posterior. El frontend sigue siendo la plantilla de Vite, por lo que todavía no hay login visual ni dashboard integrado. No se deben incorporar datos personales de esas pruebas a documentos ni fixtures.
 
@@ -165,7 +165,7 @@ Contrato de horario implementado: `200 { schedule: { periods: [...] } }`. Cada p
 
 El DTO de horario pasó pruebas aisladas de días, horas y valores nulos. Emilio corrigió la respuesta duplicada de `getSchedule` y confirmó que sigue funcionando. La revisión constató un solo envío y `npm run check` pasó. También se verificó por HTTP `401` sin cookie en los cuatro endpoints académicos, sin usar credenciales institucionales.
 
-Consolidación completada para los casos cubiertos: 102 pruebas aisladas de sesión, errores, cifrado, origen y configuración, más una prueba real autorizada con SII y Supabase. Login, sesión y los cuatro recursos devolvieron `200`; logout `204`; reutilizar la cookie tras logout, `401`. Se creó y revocó solo la sesión de esa prueba, sin registrar secretos ni datos académicos. Los tests aislados no acceden a servicios reales ni al `.env` del equipo.
+Consolidación completada para los casos cubiertos: 107 pruebas aisladas de sesión, errores, cifrado, origen y configuración, más una prueba real autorizada con SII y Supabase. Login, sesión y los cuatro recursos devolvieron `200`; logout `204`; reutilizar la cookie tras logout, `401`. Se creó y revocó solo la sesión de esa prueba, sin registrar secretos ni datos académicos. Los tests aislados no acceden a servicios reales ni al `.env` del equipo.
 
 Siguientes pendientes de Emilio: esquema SQL reproducible, configuración de despliegue, comprobación en navegador con dominios reales, revisión de límites de intentos y latencia/reintentos de Supabase. Rebo puede construir todo el frontend con los mismos DTO y contratos; el navegador debe usar el origen configurado y `credentials: 'include'`. No agregar excepciones de origen para evitar un `403`: corregir `FRONTEND_ORIGIN` si cambian los puertos. Postman/comandos sin Origin, Referer o metadatos cross-site siguen funcionando. Ambos deben elegir la función extra liderada por Rebo; no comenzar automáticamente otra fase.
 
@@ -276,7 +276,7 @@ Ramas sugeridas: `feature/dashboard-ui` y `feature/kardex-ui`, una tarea a la ve
 - Consumir `/student/profile` para el dashboard con indicadores de créditos, avance y promedios; distinguir `null` de cero.
 - Consumir `/student/kardex` para el historial completo por materia/período y su resultado final institucional; conservar intentos y etiquetas textuales.
 - Reutilizar cliente HTTP, sesión y navegación del login; no crear otro mecanismo de autenticación.
-- Añadir carga, error, vacío y navegación entre secciones. Coordinar con Emilio cualquier dato no incluido en los DTO; `persona` no se expone aún.
+- Añadir carga, error, vacío y navegación entre secciones. Usar `profile.name` para el nombre del estudiante; coordinar con Emilio cualquier otro dato no incluido en los DTO.
 
 ### 3. Calificaciones y horario
 

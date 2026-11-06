@@ -341,6 +341,30 @@ try {
     try { assert.equal((await call('/student/profile',{cookie:cookie(id)})).status,502); }
     finally { bodies['/api/movil/estudiante']=previous; }
   });
+  for (const [label, persona, expectedStatus, expectedName] of [
+    ['text is trimmed without changing accents or case', '  Álex Ejemplo  ', 200, 'Álex Ejemplo'],
+    ['missing name remains null', undefined, 200, null],
+    ['null name remains null', null, 200, null],
+    ['object name is rejected', { nombre: 'Unexpected object' }, 502, undefined],
+    ['blank name is rejected', '   ', 502, undefined],
+  ]) {
+    await test('profile name: '+label, async()=>{
+      const id=seed();
+      const previous=bodies['/api/movil/estudiante'];
+      const data={...previous.data};
+      if(persona===undefined)delete data.persona;
+      else data.persona=persona;
+      bodies['/api/movil/estudiante']=envelope(data);
+      try {
+        const r=await call('/student/profile',{cookie:cookie(id)});
+        assert.equal(r.status,expectedStatus);
+        if(expectedStatus===200) {
+          assert.equal(r.data.profile.name,expectedName);
+          assert(!('persona' in r.data.profile));
+        }
+      } finally {bodies['/api/movil/estudiante']=previous;}
+    });
+  }
   await test('unknown route has safe JSON 404',async()=>{
     const r=await call('/audit-missing'); assert.equal(r.status,404); assert.deepEqual(r.data,{message:'Route not found.'});
   });
