@@ -40,6 +40,11 @@ No quedan tareas antiguas de crear esas pantallas/elegir extra. Sí se detectaro
 - Perfil con name, Kardex, parciales y horario reales de SII mediante DTO; sin llamadas frontend a SII.
 - Dashboard con perfil/gráficas/Top 5, Kardex con búsqueda/ordenamiento y carga académica con agenda/tarjetas de parciales.
 - Centro de Préstamos: catálogo, reservas, cancelación, entrega, devolución, creación de recursos y ajuste de stock; utiliza resources y loans.
+- Interceptor Centralizado de Autenticación (`frontend/src/services/api.ts`): Creación del helper `apiFetch` para envolver las peticiones `fetch`. Captura automáticamente respuestas con código `401 Unauthorized` (sesiones expiradas o cerradas en otras pestañas) y redirige al usuario de forma limpia a `/login`.
+- Refactorización de Servicios Frontend: Actualización de `auth.ts`, `student.ts`, `resources.ts`, `schedule.ts`, `grades.ts` y `kardex.ts` para consumir `apiFetch`.
+- Gestión Avanzada de Catálogo e Inventario (Admin): Formularios modales para creación de recursos mediante URL de imágenes de internet y botones de incremento/decremento dinámico de stock (`+`/`-`) con actualización reactiva instantánea en el estado de React.
+- Validación Estricta de Stock en Backend: Garantía en base de datos de que el stock total y disponible no puedan ser negativos, impidiendo reducciones de inventario sobre artículos actualmente en préstamo.
+- Configuración de Producción en Render: Despliegue del Web Service (Backend) con `npm install --include=dev && npm run build` (para resolver dependencias TypeScript), cookies seguras (`COOKIE_SECURE=true`, `SAME_SITE=none`), y Static Site (Frontend) con regla de reescritura (`/*` -> `/index.html`) para soporte completo de React Router SPA.
 - Despliegue Render realizado por Rebo y funcionamiento reportado por Emilio.
 - Verificación actual: check correcto con cuatro advertencias de lint; build correcto con advertencia de bundle grande; 107/107 regresiones institucionales. Esa batería no cubre autorización ni concurrencia del nuevo extra.
 
@@ -138,6 +143,14 @@ No quedan tareas antiguas de crear esas pantallas/elegir extra. Sí se detectaro
 3. **Entrada/salida:** consultan /student/grades y /student/schedule con cookies; retornan periods[0]?.subjects || [] de cada respuesta. Lanza Error ante HTTP no exitoso.
 4. **Conexiones:** Schedule cruza las listas por groupId.
 5. **Estado/límites:** solo exponen el primer período; se pierden sus metadatos y otros períodos. No incluyen filtro por período ni tratamiento global de 401.
+
+### Cliente API Centralizado e Interceptor 401 (`frontend/src/services/api.ts`)
+
+1. **Problema que resuelve:** Evita duplicar la configuración de `credentials: 'include'` en cada servicio y resuelve el estado de "sesión huérfana" cuando una sesión expira o se cierra desde otra pestaña del navegador.
+2. **Motivo:** Encapsular las peticiones HTTP globales para aplicar la política de autenticación en un único punto sin modificar cada componente React.
+3. **Entrada/salida:** Recibe un `endpoint` (relativo o absoluto) y un objeto `ApiFetchOptions`. Devuelve una promesa `Response`. Si recibe un estado HTTP `401` y la opción `skipAuthRedirect` no está activa, fuerza la navegación a `/login` lanzando la excepción `'Sesión expirada'`.
+4. **Conexiones:** Reemplaza a `fetch` directo dentro de `auth.ts`, `student.ts`, `resources.ts`, `schedule.ts`, `grades.ts` y `kardex.ts`.
+5. **Estado/límites:** Implementado y probado. `authService.login` y `checkSession` utilizan `skipAuthRedirect: true` para permitir que sus llamadas manejen errores de credenciales sin provocar redirecciones prematuras.
 
 ## Funcionalidad EXTRA 
 
@@ -669,6 +682,17 @@ Después de pull ejecutar npm install para sincronizar node_modules con package-
 ### Despliegue y evidencia
 
 Rebo realizó el despliegue en Render, según informó Emilio. La arquitectura mantiene frontend estático y API Express independientes. No hay render.yaml ni URLs públicas en los archivos revisados; no se infieren comandos exactos del panel ni se inventan enlaces. Esta revisión no verificó cookies, configuración SPA, permisos ni stock de producción. La configuración local de backend conserva origen localhost:5173, cookie no Secure y SameSite=lax. El valor trust proxy=1 está en app.ts; no se validó su topología real desde Render.
+
+1. **Web Service (Backend):**
+   - **Build Command:** `npm install --include=dev && npm run build` (fuerza la descarga de tipos TypeScript de Node, Express y CORS).
+   - **Start Command:** `npm start`
+   - **Variables de Entorno Clave:** `NODE_ENV=production`, `COOKIE_SECURE=true`, `COOKIE_SAME_SITE=none`, `FRONTEND_ORIGIN` (coincidiendo exactamente con el dominio del Static Site sin barra final para prevenir errores CORS).
+
+2. **Static Site (Frontend):**
+   - **Build Command:** `npm install --include=dev && npm run build`
+   - **Publish Directory:** `dist`
+   - **Variables de Entorno Clave:** `VITE_API_URL` (URL pública del backend sin barra `/` al final) y `VITE_ADMIN_CONTROL_NUMBER`.
+   - **Reglas de Redirección (Rewrite Rules):** Configurada la regla `/*` -> `/index.html` (Action: `Rewrite`) para evitar errores 404 al recargar rutas profundas gestionadas por React Router SPA.
 
 ## Scripts
 

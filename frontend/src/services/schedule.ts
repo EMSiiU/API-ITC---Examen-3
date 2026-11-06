@@ -1,4 +1,5 @@
-// Usamos la variable de entorno de Vite o un valor por defecto
+import { apiFetch } from './api';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export interface Session {
@@ -20,9 +21,8 @@ export interface ScheduleSubject {
 }
 
 export const getStudentSchedule = async (): Promise<ScheduleSubject[]> => {
-  const response = await fetch(`${API_URL}/student/schedule`, { credentials: 'include' });
+  const response = await apiFetch(`${API_URL}/student/schedule`);
   if (!response.ok) throw new Error('Error al obtener el horario');
   const data = await response.json();
-  // Retornamos las materias del primer periodo (actual)
   return data.schedule.periods[0]?.subjects || [];
 };

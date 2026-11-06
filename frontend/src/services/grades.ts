@@ -1,4 +1,5 @@
-// Usamos la variable de entorno de Vite o un valor por defecto
+import { apiFetch } from './api';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export interface Assessment {
@@ -17,9 +18,8 @@ export interface GradeSubject {
 }
 
 export const getStudentGrades = async (): Promise<GradeSubject[]> => {
-  const response = await fetch(`${API_URL}/student/grades`, { credentials: 'include' });
+  const response = await apiFetch(`${API_URL}/student/grades`);
   if (!response.ok) throw new Error('Error al obtener las calificaciones');
   const data = await response.json();
-  // Retornamos las materias del primer periodo (actual)
   return data.grades.periods[0]?.subjects || [];
 };
