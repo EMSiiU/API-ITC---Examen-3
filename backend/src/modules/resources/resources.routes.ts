@@ -6,7 +6,9 @@ import {
   cancelMyReservation,
   getAdminLoans,
   returnResource,
-  activateResource
+  activateResource,
+  createResourceCtrl,
+  adjustStockCtrl
 } from './resources.controller.js';
 
 export const resourcesRouter = Router();
@@ -20,3 +22,5 @@ resourcesRouter.post('/loans/:id/cancel', cancelMyReservation);
 resourcesRouter.get('/admin/loans', getAdminLoans);
 resourcesRouter.post('/admin/loans/:id/return', returnResource);
 resourcesRouter.post('/admin/loans/:id/activate', activateResource);
+resourcesRouter.post('/admin/catalog', createResourceCtrl);
+resourcesRouter.patch('/admin/catalog/:id/stock', adjustStockCtrl);

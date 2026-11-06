@@ -195,3 +195,56 @@ export const markLoanAsActive = async (loanId: string) => {
 
   return { message: 'Equipo entregado al alumno. Préstamo activo.' };
 };
+
+export const createNewResource = async (resourceData: any) => {
+  const { name, description, category, total_stock, image_url } = resourceData;
+  
+  // Al crear un artículo nuevo, el disponible es igual al stock total inicial
+  const { data, error } = await supabase
+    .from('resources')
+    .insert([{
+      name,
+      description,
+      category,
+      total_stock,
+      available_stock: total_stock,
+      image_url
+    }])
+    .select()
+    .single();
+
+  if (error) throw new Error('Error al crear el recurso: ' + error.message);
+  return data;
+};
+
+export const adjustResourceStock = async (resourceId: string, delta: number) => {
+  // 1. Obtenemos el stock actual
+  const { data: resource, error: fetchError } = await supabase
+    .from('resources')
+    .select('total_stock, available_stock')
+    .eq('id', resourceId)
+    .single();
+
+  if (fetchError || !resource) throw new Error('Recurso no encontrado.');
+
+  // 2. Calculamos los nuevos valores (delta puede ser +1 o -1)
+  const newTotal = resource.total_stock + delta;
+  const newAvailable = resource.available_stock + delta;
+
+  // 3. Validaciones estrictas
+  if (newTotal < 0) throw new Error('El stock total no puede ser negativo.');
+  if (newAvailable < 0) {
+    throw new Error('No puedes reducir el stock. El artículo faltante se encuentra actualmente en préstamo.');
+  }
+
+  // 4. Actualizamos la base de datos
+  const { data, error } = await supabase
+    .from('resources')
+    .update({ total_stock: newTotal, available_stock: newAvailable })
+    .eq('id', resourceId)
+    .select()
+    .single();
+
+  if (error) throw new Error('Error al actualizar el stock.');
+  return data;
+};
