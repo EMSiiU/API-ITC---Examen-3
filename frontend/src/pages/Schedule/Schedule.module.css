@@ -1,0 +1,184 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 1rem;
+}
+
+.title {
+  color: #0f172a;
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Pestañas */
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tabBtn {
+  background: transparent;
+  border: none;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+}
+
+.tabBtn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.tabActive {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.tabActive:hover {
+  background: #eff6ff;
+}
+
+/* Vista Agenda (Columnas por día) */
+.agendaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.dayColumn {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dayTitle {
+  font-weight: 700;
+  color: #334155;
+  text-align: center;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.classBlock {
+  background: white;
+  border-left: 4px solid #3b82f6;
+  padding: 0.75rem;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.classTime { font-weight: 700; color: #3b82f6; font-size: 0.85rem; }
+.className { font-weight: 600; color: #0f172a; font-size: 1rem; line-height: 1.2; }
+.classRoom { font-size: 0.85rem; color: #64748b; }
+
+/* Vista Tarjetas (Horario + Calificaciones) */
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cardHeader {
+  background: #f8fafc;
+  padding: 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.cardCode { font-size: 1rem; font-weight: 700; color: #3b82f6; margin-bottom: 0.25rem; display: block;}
+.cardTitle { margin: 0; font-size: 1.25rem; color: #0f172a; font-weight: 700; line-height: 1.3;}
+.cardGroup { font-size: 01rem; color: #64748b; margin-top: 0.5rem; display: block;}
+
+.cardBody {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex: 1;
+}
+
+.sessionList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sessionItem {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1rem;
+  color: #334155;
+  background: #f1f5f9;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+.gradesSection {
+  margin-top: auto;
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 1rem;
+}
+
+.gradesTitle { font-size: 1rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;}
+.gradesRow { display: flex; gap: 0.5rem; flex-wrap: wrap;}
+
+.gradeBadge {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 50px;
+}
+.gradeNumber { font-size: 1rem; color: #64748b; }
+.gradeValue { font-weight: 700; color: #0f172a; }
+.valGreen { color: #166534; }
+.valYellow { color: #a9c426; }
+.valRed { color: #991b1b; }
+
+.loading, .error { padding: 3rem; text-align: center; color: #64748b; font-size: 1.5rem;}
+.error { color: #ef4444; }

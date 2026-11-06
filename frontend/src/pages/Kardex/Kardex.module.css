@@ -34,7 +34,7 @@
 
 .searchIcon {
   position: absolute;
-  left: 1rem;
+  left: 1.1rem;
   top: 50%;
   transform: translateY(-50%);
   color: #64748b;
@@ -45,7 +45,7 @@
   padding: 0.75rem 1rem 0.75rem 2.75rem;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   outline: none;
   transition: all 0.2s;
   box-sizing: border-box;
@@ -122,7 +122,7 @@
 }
 
 .sortIcon {
-  color: #94a3b8;
+  color: #474b70;
   width: 14px;
   height: 14px;
 }
