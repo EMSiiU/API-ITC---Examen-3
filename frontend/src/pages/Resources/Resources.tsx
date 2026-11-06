@@ -1,14 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Package, CheckCircle, List, CalendarClock } from 'lucide-react';
-import { getResources, reserveResource, getMyLoans, cancelReservation, type Resource, type Loan } from '../../services/resources';
+import { Package, CheckCircle, List, CalendarClock, ShieldAlert } from 'lucide-react';
+import { 
+  getResources, reserveResource, getMyLoans, cancelReservation,
+  getAdminLoans, markAsReturned, markAsActive, type Resource, type Loan 
+} from '../../services/resources';
 import { getStudentProfile } from '../../services/student';
 import styles from './Resources.module.css';
+
+const ADMIN_CONTROL_NUMBER = import.meta.env.VITE_ADMIN_CONTROL_NUMBER;
 
 const Resources = () => {
   const [activeTab, setActiveTab] = useState<'catalogo' | 'mis_prestamos'>('catalogo');
   const [resources, setResources] = useState<Resource[]>([]);
   const [myLoans, setMyLoans] = useState<Loan[]>([]);
+  const [adminLoans, setAdminLoans] = useState<Loan[]>([]);
   const [studentId, setStudentId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,15 +29,23 @@ const Resources = () => {
         const profileData = await getStudentProfile();
         const currentId = profileData.controlNumber as string;
         setStudentId(currentId);
-
-        // Cargamos catálogo y préstamos en paralelo
-        const [resourcesData, loansData] = await Promise.all([
-          getResources(),
-          getMyLoans(currentId)
-        ]);
         
-        setResources(resourcesData);
-        setMyLoans(loansData);
+        const isUserAdmin = currentId === ADMIN_CONTROL_NUMBER;
+        setIsAdmin(isUserAdmin);
+
+        if (isUserAdmin) {
+          // Si es admin, solo cargamos la lista global
+          const allLoans = await getAdminLoans();
+          setAdminLoans(allLoans);
+        } else {
+          // Si es alumno, cargamos su catálogo y sus préstamos
+          const [resourcesData, loansData] = await Promise.all([
+            getResources(),
+            getMyLoans(currentId)
+          ]);
+          setResources(resourcesData);
+          setMyLoans(loansData);
+        }
       } catch (err) {
         setError('No se pudo cargar la información necesaria.');
         console.error(err);
@@ -102,6 +117,38 @@ const Resources = () => {
       cancelled: 'Cancelado'
     };
     return labels[status] || status;
+  };
+
+  const handleReturn = async (loanId: string) => {
+    if (!window.confirm('¿Confirmar que el alumno entregó el equipo físicamente?')) return;
+    
+    try {
+      setMessage(null);
+      await markAsReturned(loanId);
+      setMessage({ text: 'Equipo marcado como devuelto. Inventario actualizado.', type: 'success' });
+      
+      // Recargar la tabla del admin
+      const allLoans = await getAdminLoans();
+      setAdminLoans(allLoans);
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Error al procesar la devolución.', type: 'error' });
+    } finally {
+      setTimeout(() => setMessage(null), 5000);
+    }
+  };
+
+  const handleActivate = async (loanId: string) => {
+    try {
+      setMessage(null);
+      await markAsActive(loanId);
+      setMessage({ text: 'Equipo entregado. Préstamo activo.', type: 'success' });
+      const allLoans = await getAdminLoans();
+      setAdminLoans(allLoans);
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Error al procesar la entrega.', type: 'error' });
+    } finally {
+      setTimeout(() => setMessage(null), 5000);
+    }
   };
 
   const renderCatalog = () => (
@@ -199,29 +246,78 @@ const Resources = () => {
     );
   };
 
+  const renderAdminPanel = () => (
+    <div className={styles.adminContainer}>
+      <table className={styles.adminTable}>
+        <thead>
+          <tr>
+            <th>ID Alumno</th>
+            <th>Recurso</th>
+            <th>Fecha Préstamo</th>
+            <th>Estado</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {adminLoans.map(loan => (
+            <tr key={loan.id}>
+              <td><strong>{loan.student_id}</strong></td>
+              <td>{loan.resources?.name} <br/><small style={{color: '#64748b'}}>{loan.resources?.category}</small></td>
+              <td>{new Date(loan.borrow_date).toLocaleDateString()}</td>
+              <td>
+                <span className={`${styles.statusBadge} ${styles[`status_${loan.status}`]}`}>
+                  {getStatusLabel(loan.status)}
+                </span>
+              </td>
+              <td>
+                {loan.status === 'pending_pickup' && (
+                  <button 
+                    className={styles.btnActivate}
+                    onClick={() => handleActivate(loan.id)}
+                  >
+                    Entregar Equipo
+                  </button>
+                )}
+                {(loan.status === 'active' || loan.status === 'overdue') && (
+                  <button 
+                    className={styles.btnReturn}
+                    onClick={() => handleReturn(loan.id)}
+                  >
+                    Marcar Devuelto
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+          {adminLoans.length === 0 && (
+            <tr><td colSpan={5} style={{textAlign: 'center'}}>No hay préstamos registrados.</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <h1 className={styles.title}>
-          <Package size={28} color="#3b82f6" />
-          Centro de Préstamos
+          {isAdmin ? <ShieldAlert size={28} color="#10b981" /> : <Package size={28} color="#3b82f6" />}
+          {isAdmin ? 'Panel de Administración de Recursos' : 'Centro de Préstamos'}
         </h1>
-        <p className={styles.subtitle}>Reserva equipo y consulta tus préstamos activos.</p>
+        <p className={styles.subtitle}>
+          {isAdmin ? 'Gestiona las entregas y devoluciones de toda la escuela.' : 'Reserva equipo y consulta tus préstamos activos.'}
+        </p>
         
-        <div className={styles.tabs}>
-          <button 
-            className={`${styles.tabBtn} ${activeTab === 'catalogo' ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab('catalogo')}
-          >
-            <List size={18} /> Catálogo
-          </button>
-          <button 
-            className={`${styles.tabBtn} ${activeTab === 'mis_prestamos' ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab('mis_prestamos')}
-          >
-            <CalendarClock size={18} /> Mis Préstamos
-          </button>
-        </div>
+        {!isAdmin && (
+          <div className={styles.tabs}>
+            <button className={`${styles.tabBtn} ${activeTab === 'catalogo' ? styles.tabActive : ''}`} onClick={() => setActiveTab('catalogo')}>
+              <List size={18} /> Catálogo
+            </button>
+            <button className={`${styles.tabBtn} ${activeTab === 'mis_prestamos' ? styles.tabActive : ''}`} onClick={() => setActiveTab('mis_prestamos')}>
+              <CalendarClock size={18} /> Mis Préstamos
+            </button>
+          </div>
+        )}
       </div>
 
       {message && (
@@ -240,6 +336,8 @@ const Resources = () => {
         <div className={styles.loading}>Cargando información...</div>
       ) : error ? (
         <div className={styles.error}>{error}</div>
+      ) : isAdmin ? (
+        renderAdminPanel()
       ) : activeTab === 'catalogo' ? (
         renderCatalog()
       ) : (

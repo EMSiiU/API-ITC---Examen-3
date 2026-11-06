@@ -230,3 +230,63 @@
 
 .loading, .error { padding: 3rem; text-align: center; color: #64748b; }
 .error { color: #ef4444; }
+
+/* Vista de Administrador */
+.adminContainer {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.adminTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.adminTable th {
+  background-color: #f8fafc;
+  padding: 1rem;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.adminTable td {
+  padding: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
+.adminTable tr:last-child td {
+  border-bottom: none;
+}
+
+.btnActivate {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-right: 0.5rem;
+}
+.btnActivate:hover { background-color: #2563eb; }
+
+.btnReturn {
+  background-color: #10b981;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btnReturn:hover { background-color: #059669; }
+.btnReturn:disabled { background-color: #94a3b8; cursor: not-allowed; }

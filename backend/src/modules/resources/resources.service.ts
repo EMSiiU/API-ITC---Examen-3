@@ -175,3 +175,23 @@ export const markLoanAsReturned = async (loanId: string) => {
 
   return { message: 'Recurso devuelto con éxito. Inventario actualizado.' };
 };
+
+export const markLoanAsActive = async (loanId: string) => {
+  const { data: loan, error: fetchError } = await supabase
+    .from('loans')
+    .select('status')
+    .eq('id', loanId)
+    .single();
+
+  if (fetchError || !loan) throw new Error('Préstamo no encontrado.');
+  if (loan.status !== 'pending_pickup') throw new Error('Solo se pueden entregar reservas pendientes.');
+
+  const { error: updateError } = await supabase
+    .from('loans')
+    .update({ status: 'active' })
+    .eq('id', loanId);
+
+  if (updateError) throw new Error('Error al actualizar el estado del préstamo.');
+
+  return { message: 'Equipo entregado al alumno. Préstamo activo.' };
+};
